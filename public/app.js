@@ -1498,6 +1498,17 @@
   const CACHE_KEY = 'catalogo-cache-v1';
   const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min: evita repetir la lectura del catálogo publicado en cada visita
 
+  function renderGridSkeletons(){
+    if(!grid) return;
+    grid.innerHTML = '';
+    for(let i=0;i<8;i++){
+      const sk = document.createElement('div');
+      sk.className = 'card card-skeleton';
+      sk.innerHTML = '<div class="card-skeleton-img"></div><div class="card-skeleton-line" style="width:75%"></div><div class="card-skeleton-line" style="width:40%"></div>';
+      grid.appendChild(sk);
+    }
+  }
+
   async function loadProducts(retriesLeft){
     if(retriesLeft === undefined) retriesLeft = 2;
     // --- 1) Camino rápido para el cliente: catálogo publicado ---
@@ -1505,17 +1516,21 @@
     // reciente (menos de CACHE_TTL_MS), ni siquiera se consulta Firebase:
     // se usa la copia guardada tal cual, ahorrando esas lecturas.
     if(!isAdmin){
+      let mostroCache = false;
       try{
         const guardadoPrevio = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-        if(guardadoPrevio && guardadoPrevio.productos && guardadoPrevio.productos.length &&
-           guardadoPrevio.cachedAt && (Date.now() - guardadoPrevio.cachedAt < CACHE_TTL_MS)){
+        if(guardadoPrevio && guardadoPrevio.productos && guardadoPrevio.productos.length){
+          // Muestra la caché al instante aunque esté vencida (evita la pantalla vacía);
+          // si está vencida seguimos abajo a refrescarla en silencio contra Firebase.
           products = guardadoPrevio.productos;
           if(loadingState) loadingState.style.display = 'none';
           render();
           abrirProductoCompartido();
-          return;
+          mostroCache = true;
+          if(guardadoPrevio.cachedAt && (Date.now() - guardadoPrevio.cachedAt < CACHE_TTL_MS)) return;
         }
       }catch(e){ /* caché corrupto o inaccesible: seguimos por el camino normal */ }
+      if(!mostroCache) renderGridSkeletons();
       try{
         const publicado = await window.fbLoadCatalog();
         if(publicado && publicado.productos.length){
@@ -5519,7 +5534,8 @@
       if(window.fbPushActivado && window.fbPushActivado()){ showToast('Ya tienes las notificaciones activadas.'); return; }
       try{
         await window.fbEnablePush();
-        pushBtn.classList.add('active');
+        pushBtn.classList.add('active', 'pulse');
+        setTimeout(()=> pushBtn.classList.remove('pulse'), 650);
         showToast('¡Notificaciones activadas!');
       }catch(e){
         showToast(e.message || 'No se pudo activar las notificaciones.');

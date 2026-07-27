@@ -41,6 +41,15 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebas
     if(!token) throw new Error('No se pudo generar el token de notificaciones.');
     await setDoc(doc(db, 'push_tokens', token), { token, createdAt: Date.now() });
     localStorage.setItem('push-activado', '1');
+    fetch('/api/send-notification', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        onlyToken: token,
+        title: '¡Bienvenido a las notificaciones! 🔔',
+        message: 'Te avisaré de nuevo stock, ofertas y notas nuevas del blog 😸. Puedes desactivarlas cuando quieras desde tu navegador.',
+        link: 'https://tiendapoke.com/'
+      })
+    }).catch(()=>{});
     return token;
   };
   window.fbPushActivado = function(){

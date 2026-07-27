@@ -109,6 +109,10 @@
   const postBodyImgHint = document.getElementById('postBodyImgHint');
   const postCancelBtn = document.getElementById('postCancelBtn');
   const postSaveBtn = document.getElementById('postSaveBtn');
+  const postNotifCheck = document.getElementById('postNotifCheck');
+  const postNotifFields = document.getElementById('postNotifFields');
+  const postNotifTitleInput = document.getElementById('postNotifTitleInput');
+  const postNotifBodyInput = document.getElementById('postNotifBodyInput');
   const postDeleteRow = document.getElementById('postDeleteRow');
   const postDeleteBtn = document.getElementById('postDeleteBtn');
 
@@ -149,6 +153,16 @@
     try{
       return new Date(ts).toLocaleDateString('es-PE', { day:'numeric', month:'long', year:'numeric' });
     }catch(e){ return ''; }
+  }
+
+  function renderSkeletons(){
+    blogGrid.innerHTML = '';
+    for(let i=0;i<6;i++){
+      const sk = document.createElement('div');
+      sk.className = 'blog-card blog-skeleton';
+      sk.innerHTML = '<div class="blog-skeleton-img"></div><div class="blog-skeleton-line" style="width:70%"></div><div class="blog-skeleton-line" style="width:45%"></div>';
+      blogGrid.appendChild(sk);
+    }
   }
 
   function renderGrid(){
@@ -335,17 +349,21 @@
     blogLoadError.style.display = 'none';
     const CACHE_KEY = 'blog-posts-cache-v1';
     const CACHE_TTL_MS = 5 * 60 * 1000;
+    let mostroCache = false;
     try{
       const guardado = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-      if(!isAdmin && guardado && Array.isArray(guardado.posts) && guardado.posts.length &&
-         guardado.cachedAt && (Date.now() - guardado.cachedAt < CACHE_TTL_MS)){
+      if(!isAdmin && guardado && Array.isArray(guardado.posts) && guardado.posts.length){
+        // Muestra la caché de inmediato aunque esté vencida (evita la pantalla vacía);
+        // si está vencida, de todos modos seguimos abajo a refrescarla en silencio.
         posts = guardado.posts;
         renderGrid();
+        mostroCache = true;
         const wanted = new URLSearchParams(location.search).get('post') || location.hash.replace('#','');
         if(wanted && posts.find(p=>p.id===wanted)) openPost(wanted);
-        return;
+        if(guardado.cachedAt && (Date.now() - guardado.cachedAt < CACHE_TTL_MS)) return;
       }
     }catch(e){ /* seguimos por el camino normal */ }
+    if(!mostroCache) renderSkeletons();
     try{
       const list = await window.fbLoadBlogPosts();
       posts = Array.isArray(list) ? list : [];
@@ -562,6 +580,8 @@
     postDeleteRow.style.display = 'none';
     postModalTitle.textContent = 'Nuevo post';
     postFormError.style.display = 'none';
+    postNotifCheck.checked = false;
+    postNotifFields.style.display = 'none';
   }
   function openNew(){
     resetPostForm();
@@ -595,6 +615,34 @@
     else if(heroOverlay.classList.contains('show')) confirmDiscard(heroGuard, false, ()=> heroOverlay.classList.remove('show'));
   });
 
+  postNotifCheck.addEventListener('change', ()=>{
+    postNotifFields.style.display = postNotifCheck.checked ? 'block' : 'none';
+    if(postNotifCheck.checked){
+      postNotifTitleInput.value = postTitleInput.value.trim() || 'Nueva nota en el blog';
+      postNotifBodyInput.value = (postExcerptInput.value.trim() || 'Lee la nueva nota en el Pokéblog.').slice(0,140);
+    }
+  });
+  async function getPin(){
+    try{
+      const res = await window.storage.get('admin-pin', true);
+      return res ? res.value : atob('NzQ2MlRN');
+    }catch(e){ return atob('NzQ2MlRN'); }
+  }
+  async function enviarNotifPost(post){
+    try{
+      const pin = (await getPin()).toUpperCase();
+      await fetch('/api/send-notification', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pin,
+          title: postNotifTitleInput.value.trim() || post.title,
+          message: postNotifBodyInput.value.trim() || post.excerpt || post.title,
+          link: 'https://tiendapoke.com/blog.html?post=' + encodeURIComponent(post.id)
+        })
+      });
+    }catch(e){ /* si falla el envío, el post ya se guardó igual */ }
+  }
+
   postSaveBtn.addEventListener('click', async ()=>{
     const title = postTitleInput.value.trim();
     if(!title){ postFormError.textContent = 'Ponle un título al post.'; postFormError.style.display='block'; return; }
@@ -611,6 +659,7 @@
       renderGrid();
       try{ localStorage.removeItem('blog-posts-cache-v1'); }catch(e){}
       try{ await window.fbSaveBlogPost(p); }catch(e){}
+      if(postNotifCheck.checked) enviarNotifPost(p);
       return;
     }
     const newPost = {
@@ -623,6 +672,7 @@
     renderGrid();
     try{ localStorage.removeItem('blog-posts-cache-v1'); }catch(e){}
     try{ await window.fbSaveBlogPost(newPost); }catch(e){}
+    if(postNotifCheck.checked) enviarNotifPost(newPost);
   });
 
   postDeleteBtn.addEventListener('click', async ()=>{

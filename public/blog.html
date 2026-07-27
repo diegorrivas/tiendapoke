@@ -132,6 +132,10 @@
   .blog-post-view{display:none; padding:36px 20px 80px; max-width:760px; margin:0 auto; box-sizing:border-box;}
   .blog-post-view.show{display:block;}
   .blog-grid-wrap.hidden, .blog-hero.hidden{display:none;}
+  .blog-skeleton{cursor:default; pointer-events:none;}
+  .blog-skeleton-img{aspect-ratio:16/10; border-radius:12px; background:linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 50%, var(--surface-2) 75%); background-size:200% 100%; animation:blogSkeleton 1.4s ease infinite;}
+  .blog-skeleton-line{height:12px; border-radius:6px; margin-top:12px; background:linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 50%, var(--surface-2) 75%); background-size:200% 100%; animation:blogSkeleton 1.4s ease infinite;}
+  @keyframes blogSkeleton{0%{background-position:200% 0;} 100%{background-position:-200% 0;}}
   .blog-post-back{display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; color:var(--cream-dim); text-decoration:none; margin-bottom:20px; cursor:pointer; background:none; border:none;}
   .blog-post-back:hover{color:var(--gold);}
   .blog-post-head-row{display:flex; align-items:flex-start; justify-content:space-between; gap:16px;}
@@ -344,6 +348,21 @@
     <div class="field">
       <label>Resumen corto (aparece en la tarjeta)</label>
       <textarea id="postExcerptInput" rows="2" placeholder="Una o dos líneas que resuman el post"></textarea>
+    </div>
+
+    <div class="field" style="display:flex; align-items:center; gap:8px; flex-direction:row;">
+      <input type="checkbox" id="postNotifCheck" style="width:auto; margin:0;">
+      <label style="margin:0; text-transform:none; font-size:13.5px;" for="postNotifCheck">Enviar notificación push a quienes la activaron</label>
+    </div>
+    <div id="postNotifFields" style="display:none;">
+      <div class="field">
+        <label>Título de la notificación</label>
+        <input type="text" id="postNotifTitleInput" maxlength="60">
+      </div>
+      <div class="field">
+        <label>Mensaje de la notificación</label>
+        <input type="text" id="postNotifBodyInput" maxlength="140">
+      </div>
     </div>
 
     <div class="form-section-title">Contenido</div>

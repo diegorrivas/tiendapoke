@@ -178,6 +178,32 @@
   }
   .theme-btn svg{width:14px;height:14px;}
   #pushBtn.active{background:var(--gold); color:var(--ink); border-color:var(--gold);}
+  #pushBtn:not(.active){
+    background:color-mix(in srgb, var(--gold) 16%, transparent);
+    border-color:var(--gold); color:var(--gold); animation:pushBounce 2.2s ease infinite;
+  }
+  #pushBtn.pulse::after{
+    content:''; position:absolute; inset:-4px; border-radius:999px; border:2px solid var(--gold);
+    animation:pushPulse .6s ease-out;
+  }
+  .push-dot{
+    position:absolute; top:1px; right:1px; width:9px; height:9px; border-radius:50%;
+    background:var(--red); border:2px solid var(--surface); display:none;
+  }
+  #pushBtn:not(.active) .push-dot{display:block;}
+  @keyframes pushBounce{0%,55%,100%{transform:translateY(0) scale(1);} 68%{transform:translateY(-6px) scale(1.08);} 78%{transform:translateY(0) scale(1);} 88%{transform:translateY(-3px);} 100%{transform:translateY(0);}}
+  @keyframes pushPulse{0%{opacity:.9; transform:scale(1);} 100%{opacity:0; transform:scale(1.5);}}
+  .push-wave{
+    position:absolute; top:50%; width:9px; height:2px; border-radius:2px; background:var(--gold);
+    opacity:0; pointer-events:none;
+  }
+  .push-wave-l{left:-2px; transform-origin:right center;}
+  .push-wave-r{right:-2px; transform-origin:left center;}
+  #pushBtn.pulse .push-wave-l{animation:pushWaveL .55s ease-out;}
+  #pushBtn.pulse .push-wave-r{animation:pushWaveR .55s ease-out;}
+  @keyframes pushWaveL{0%{opacity:1; transform:translate(0,-50%) rotate(-25deg) scaleX(.3);} 100%{opacity:0; transform:translate(-9px,-50%) rotate(-25deg) scaleX(1.4);}}
+  @keyframes pushWaveR{0%{opacity:1; transform:translate(0,-50%) rotate(25deg) scaleX(.3);} 100%{opacity:0; transform:translate(9px,-50%) rotate(25deg) scaleX(1.4);}}
+  @media (prefers-reduced-motion:reduce){ #pushBtn{animation:none !important;} }
 
   /* ---------- barra compacta (sticky al hacer scroll) ---------- */
   .compact-bar{
@@ -573,6 +599,10 @@
     transition:none;
     display:flex; flex-direction:column;
   }
+  .card-skeleton{cursor:default; pointer-events:none;}
+  .card-skeleton-img{aspect-ratio:1/1; border-radius:12px; background:linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 50%, var(--surface-2) 75%); background-size:200% 100%; animation:cardSkeleton 1.4s ease infinite;}
+  .card-skeleton-line{height:12px; border-radius:6px; margin-top:10px; background:linear-gradient(90deg, var(--surface-2) 25%, var(--surface) 50%, var(--surface-2) 75%); background-size:200% 100%; animation:cardSkeleton 1.4s ease infinite;}
+  @keyframes cardSkeleton{0%{background-position:200% 0;} 100%{background-position:-200% 0;}}
   .card-media{flex:none;}
   .card:hover{transform:none;}
   .card-track img{transition:transform .35s ease;}
