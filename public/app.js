@@ -5460,6 +5460,42 @@
   });
   sheetCancel.addEventListener('click', ()=> sheetOverlay.classList.remove('show'));
   sheetOverlay.addEventListener('click', (e)=>{ if(e.target === sheetOverlay) sheetOverlay.classList.remove('show'); });
+  const compressBtn = document.getElementById('compressBtn');
+  if(compressBtn) compressBtn.addEventListener('click', async ()=>{
+    if(!confirm('Esto vuelve a subir cada foto del catálogo ya comprimida. Puede tardar varios minutos y no se puede deshacer. ¿Continuar?')) return;
+    compressBtn.disabled = true;
+    const totalFotos = products.reduce((n,p)=> n + ((p.images||[]).length || (p.image?1:0)), 0);
+    let hechas = 0, fallidas = 0;
+    showToast('Comprimiendo 0/' + totalFotos + '...');
+    for(const p of products){
+      const imgs = Array.isArray(p.images) && p.images.length ? p.images : (p.image ? [p.image] : []);
+      if(!imgs.length) continue;
+      const nuevas = [];
+      for(const im of imgs){
+        const src = imgSrc(im), pos = imgPos(im);
+        try{
+          const res = await fetch(src);
+          const blob = await res.blob();
+          if(blob.size <= 220 * 1024){ nuevas.push({ src, pos }); hechas++; continue; } // ya es liviana, no la tocamos
+          const file = new File([blob], 'foto.jpg', { type: blob.type || 'image/jpeg' });
+          const nuevaUrl = await window.fbUploadImage(file);
+          nuevas.push({ src: nuevaUrl, pos });
+          hechas++;
+        }catch(e){
+          nuevas.push({ src, pos });
+          fallidas++;
+        }
+        showToast('Comprimiendo ' + hechas + '/' + totalFotos + '...');
+      }
+      p.images = nuevas;
+      try{ await window.fbSaveProduct(p); }catch(e){}
+    }
+    try{ await window.fbPublishCatalog(products); }catch(e){}
+    localStorage.removeItem(CACHE_KEY);
+    compressBtn.disabled = false;
+    showToast('Listo: ' + hechas + ' fotos revisadas' + (fallidas ? ', ' + fallidas + ' con error' : '') + '.');
+  });
+
   sheetSyncBtn.addEventListener('click', async ()=>{
     const url = sheetUrlInput.value.trim();
     if(!url){ showToast('Pega primero el link publicado'); return; }
@@ -5726,8 +5762,20 @@
     startApp();
   } else {
     window.addEventListener('firebase-ready', startApp, { once:true });
-    // Respaldo: si algo falla, no dejar la pantalla colgada más de 8s
-    setTimeout(()=>{ if(!window.__firebaseReady){ if(loadingState) loadingState.style.display='none'; showToast('No se pudo conectar con la base de datos. Revisa tu conexión.'); } }, 8000);
+    // Respaldo: si la conexión inicial tarda (primera visita, conexión fría),
+    // no dejamos la pantalla colgada: reintentamos varias veces antes de avisar.
+    let watchdogTries = 0;
+    const watchdog = setInterval(()=>{
+      if(window.__firebaseReady){ clearInterval(watchdog); return; }
+      watchdogTries++;
+      if(watchdogTries >= 5){
+        clearInterval(watchdog);
+        if(loadingState) loadingState.style.display='none';
+        showToast('La conexión está lenta. Reintentando...');
+        // último intento: si Firebase de verdad no respondió, forzamos un solo reintento de carga.
+        setTimeout(()=>{ if(!window.__firebaseReady) location.reload(); }, 4000);
+      }
+    }, 3000);
   }
 
   document.querySelectorAll('.footer-link-btn[data-open-tab]').forEach(function(btn){

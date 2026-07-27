@@ -76,8 +76,33 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebas
     }
   };
 
+  // Reduce tamaño de la foto antes de subirla: máx 1600px de lado y calidad 0.82.
+  // Así las fotos nuevas pesan una fracción de lo que pesa la foto original del celular.
+  async function comprimirImagen(file){
+    if(!file.type || !file.type.startsWith('image/') || file.type === 'image/gif') return file;
+    try{
+      const bitmap = await createImageBitmap(file);
+      const MAX = 1600;
+      let { width, height } = bitmap;
+      if(width > MAX || height > MAX){
+        const ratio = Math.min(MAX / width, MAX / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.82));
+      if(!blob || blob.size >= file.size) return file; // si no mejora, nos quedamos con la original
+      return new File([blob], (file.name || 'foto').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+    }catch(e){
+      return file; // si algo falla (formato raro, navegador viejo), subimos la original
+    }
+  }
+
   // Subida de imagenes a Firebase Storage -> devuelve el link publico.
   window.fbUploadImage = async function(file){
+    file = await comprimirImagen(file);
     const stamp = Date.now() + '_' + Math.random().toString(36).slice(2,8);
     const safeName = (file.name || 'foto').replace(/[^\w.\-]/g, '_');
     const r = ref(storage, 'productos/' + stamp + '_' + safeName);
