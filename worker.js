@@ -246,12 +246,93 @@ async function handleIndexHtml(request, env, url) {
     .transform(assetRes);
 }
 
+function jsonRes(obj, status) {
+  return new Response(JSON.stringify(obj), { status: status || 200, headers: { 'Content-Type': 'application/json' } });
+}
+function base64url(bytes) {
+  let str = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+  return str.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function pemToBinary(pem) {
+  const b64 = pem.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s+/g, '');
+  const raw = atob(b64);
+  const buf = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
+  return buf.buffer;
+}
+// Genera un access token de Google a partir de la cuenta de servicio de Firebase
+// (guardada como secreto FCM_SERVICE_ACCOUNT en Cloudflare) para poder enviar
+// notificaciones push y leer los tokens guardados, sin depender de las reglas públicas.
+async function getGoogleAccessToken(env) {
+  const sa = JSON.parse(env.FCM_SERVICE_ACCOUNT);
+  const enc = new TextEncoder();
+  const now = Math.floor(Date.now() / 1000);
+  const header = base64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
+  const claim = base64url(enc.encode(JSON.stringify({
+    iss: sa.client_email,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/datastore',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600, iat: now
+  })));
+  const unsigned = header + '.' + claim;
+  const key = await crypto.subtle.importKey('pkcs8', pemToBinary(sa.private_key), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(unsigned));
+  const jwt = unsigned + '.' + base64url(sig);
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=' + encodeURIComponent(jwt)
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error('No se pudo autenticar con Google: ' + JSON.stringify(data));
+  return data.access_token;
+}
+async function loadPushTokens(accessToken) {
+  const res = await fetch('https://firestore.googleapis.com/v1/projects/tiendameowth/databases/(default)/documents/push_tokens?pageSize=1000', {
+    headers: { Authorization: 'Bearer ' + accessToken }
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.documents || []).map(d => d.fields && d.fields.token && d.fields.token.stringValue).filter(Boolean);
+}
+async function handleSendNotification(request, env) {
+  let body;
+  try { body = await request.json(); } catch (e) { return jsonRes({ error: 'JSON inválido' }, 400); }
+  const { pin, title, message, link } = body || {};
+  const pinRes = await fetch('https://firestore.googleapis.com/v1/projects/tiendameowth/databases/(default)/documents/catalogo/admin-pin');
+  const pinDoc = pinRes.ok ? await pinRes.json() : null;
+  const realPin = pinDoc && pinDoc.fields && pinDoc.fields.value ? fsValue(pinDoc.fields.value) : 'MEOWTH';
+  if (!pin || String(pin).toUpperCase() !== String(realPin || 'MEOWTH').toUpperCase()) return jsonRes({ error: 'PIN inválido' }, 401);
+  if (!title || !message) return jsonRes({ error: 'Falta título o mensaje' }, 400);
+  try {
+    const accessToken = await getGoogleAccessToken(env);
+    const tokens = await loadPushTokens(accessToken);
+    let sent = 0, failed = 0;
+    for (const token of tokens) {
+      const r = await fetch('https://fcm.googleapis.com/v1/projects/tiendameowth/messages:send', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: {
+            token,
+            notification: { title, body: message },
+            webpush: { notification: { icon: 'https://tiendapoke.com/icon-192.png' }, fcm_options: { link: link || 'https://tiendapoke.com/' } }
+          }
+        })
+      });
+      if (r.ok) sent++; else failed++;
+    }
+    return jsonRes({ sent, failed, total: tokens.length });
+  } catch (e) {
+    return jsonRes({ error: String(e.message || e) }, 500);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === '/sitemap.xml') return handleSitemap();
     if (url.pathname === '/blog.html') return handleBlogHtml(request, env, url);
     if (url.pathname === '/' || url.pathname === '/index.html') return handleIndexHtml(request, env, url);
+    if (url.pathname === '/api/send-notification' && request.method === 'POST') return handleSendNotification(request, env);
     return env.ASSETS.fetch(request);
   }
 };

@@ -5510,6 +5510,54 @@
     showToast('Listo: ' + hechas + ' fotos revisadas' + (fallidas ? ', ' + fallidas + ' con error' : '') + '.');
   });
 
+  const pushBtn = document.getElementById('pushBtn');
+  if(pushBtn){
+    if(window.fbPushActivado && window.fbPushActivado()) pushBtn.classList.add('active');
+    pushBtn.addEventListener('click', async ()=>{
+      if(window.fbPushActivado && window.fbPushActivado()){ showToast('Ya tienes las notificaciones activadas.'); return; }
+      try{
+        await window.fbEnablePush();
+        pushBtn.classList.add('active');
+        showToast('¡Notificaciones activadas!');
+      }catch(e){
+        showToast(e.message || 'No se pudo activar las notificaciones.');
+      }
+    });
+  }
+
+  const notifBtn = document.getElementById('notifBtn');
+  const notifOverlay = document.getElementById('notifOverlay');
+  const notifTitleInput = document.getElementById('notifTitleInput');
+  const notifBodyInput = document.getElementById('notifBodyInput');
+  const notifLinkInput = document.getElementById('notifLinkInput');
+  const notifSendBtn = document.getElementById('notifSendBtn');
+  const notifCancel = document.getElementById('notifCancel');
+  if(notifBtn) notifBtn.addEventListener('click', ()=>{
+    notifTitleInput.value = ''; notifBodyInput.value = ''; notifLinkInput.value = '';
+    notifOverlay.classList.add('show');
+  });
+  if(notifCancel) notifCancel.addEventListener('click', ()=> notifOverlay.classList.remove('show'));
+  if(notifSendBtn) notifSendBtn.addEventListener('click', async ()=>{
+    const title = notifTitleInput.value.trim(), message = notifBodyInput.value.trim();
+    if(!title || !message){ showToast('Escribe el título y el mensaje.'); return; }
+    notifSendBtn.disabled = true;
+    try{
+      const pin = (await getPin()).toUpperCase();
+      const res = await fetch('/api/send-notification', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin, title, message, link: notifLinkInput.value.trim() })
+      });
+      const data = await res.json();
+      if(!res.ok) throw new Error(data.error || 'Error al enviar');
+      showToast('Enviada a ' + data.sent + ' de ' + data.total + ' dispositivos.');
+      notifOverlay.classList.remove('show');
+    }catch(e){
+      showToast(e.message || 'No se pudo enviar la notificación.');
+    }finally{
+      notifSendBtn.disabled = false;
+    }
+  });
+
   sheetSyncBtn.addEventListener('click', async ()=>{
     const url = sheetUrlInput.value.trim();
     if(!url){ showToast('Pega primero el link publicado'); return; }

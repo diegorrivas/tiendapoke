@@ -1,5 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
   import {
+    getMessaging, getToken
+  } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging.js";
+  import {
     getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, writeBatch
   } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
   import {
@@ -23,6 +26,26 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebas
   const db = getFirestore(app);
   const storage = getStorage(app);
   const auth = getAuth(app);
+
+  // ---------- notificaciones push ----------
+  // La clave VAPID se genera en Firebase Console: Configuración del proyecto ->
+  // Cloud Messaging -> pestaña "Web configuration" -> "Generate key pair".
+  const VAPID_KEY = "PON_AQUI_TU_CLAVE_VAPID";
+  window.fbEnablePush = async function(){
+    if(!('serviceWorker' in navigator) || !('Notification' in window)) throw new Error('Este navegador no soporta notificaciones.');
+    const permiso = await Notification.requestPermission();
+    if(permiso !== 'granted') throw new Error('Permiso de notificaciones denegado.');
+    const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    const messaging = getMessaging(app);
+    const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+    if(!token) throw new Error('No se pudo generar el token de notificaciones.');
+    await setDoc(doc(db, 'push_tokens', token), { token, createdAt: Date.now() });
+    localStorage.setItem('push-activado', '1');
+    return token;
+  };
+  window.fbPushActivado = function(){
+    return localStorage.getItem('push-activado') === '1' && Notification.permission === 'granted';
+  };
 
   // ---------- inicio de sesión del administrador ----------
   // El panel solo puede escribir/borrar si hay una sesión iniciada. Las reglas

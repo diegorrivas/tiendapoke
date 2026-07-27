@@ -177,6 +177,7 @@
     opacity:1; transform:rotate(0) scale(1); pointer-events:auto;
   }
   .theme-btn svg{width:14px;height:14px;}
+  #pushBtn.active{background:var(--gold); color:var(--ink); border-color:var(--gold);}
 
   /* ---------- barra compacta (sticky al hacer scroll) ---------- */
   .compact-bar{
