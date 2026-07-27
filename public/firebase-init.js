@@ -1,16 +1,16 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
   import {
     getMessaging, getToken
-  } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-messaging.js";
+  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging.js";
   import {
     getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, writeBatch
-  } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
   import {
     getStorage, ref, uploadBytes, getDownloadURL
-  } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
+  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
   import {
     getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
-  } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAMpknTt4Dpv76kYf_xjOiuETf2VvC5efw",
