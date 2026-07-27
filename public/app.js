@@ -3513,7 +3513,8 @@
       if(precioMin !== null && _precio < precioMin) return false;
       if(precioMax !== null && _precio > precioMax) return false;
       if(window._soloOfertas && !(p.oldPrice && p.oldPrice > p.price)) return false;
-      if(term && !fuzzyMatch(searchTerm, (p.name || '') + ' ' + (p.desc || '') + ' ' + (p.category || '') + ' ' + (Array.isArray(p.tags) ? p.tags.join(' ') : (p.tags || '')))) return false;
+      const variantNames = Array.isArray(p.variants) ? p.variants.map(v=> v.name || '').join(' ') : '';
+      if(term && !fuzzyMatch(searchTerm, (p.name || '') + ' ' + (p.desc || '') + ' ' + (p.category || '') + ' ' + variantNames + ' ' + (Array.isArray(p.tags) ? p.tags.join(' ') : (p.tags || '')))) return false;
       return true;
     }));
 
