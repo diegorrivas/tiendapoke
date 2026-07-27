@@ -181,6 +181,13 @@
   }
   .theme-btn svg{width:14px;height:14px;}
   #pushBtn.active{background:var(--gold); color:var(--ink); border-color:var(--gold);}
+  .ios-push-sheet{animation:iosSheetUp .25s ease;}
+  @keyframes iosSheetUp{0%{transform:translateY(100%);} 100%{transform:translateY(0);}}
+  .ios-push-handle{width:36px;height:4px;border-radius:3px;background:var(--line);margin:0 auto 14px;}
+  .ios-push-steps{display:flex; gap:10px;}
+  .ios-push-step{flex:1; text-align:center; background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:14px 8px; font-size:12px; color:var(--cream); line-height:1.45; text-wrap:balance;}
+  .ios-push-num{width:24px;height:24px;border-radius:50%; background:var(--gold); color:var(--ink); font-size:12px; font-weight:800; display:flex; align-items:center; justify-content:center; margin:0 auto 10px;}
+  @media (max-width:420px){ .ios-push-steps{gap:6px;} .ios-push-step{padding:12px 6px; font-size:11px;} }
   #pushBtn:not(.active){
     background:color-mix(in srgb, var(--gold) 16%, transparent);
     border-color:var(--gold); color:var(--gold);

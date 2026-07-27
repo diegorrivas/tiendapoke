@@ -3004,6 +3004,7 @@
         const img = document.createElement('img');
         img.className = 'banner-img';
         img.src = imgSrc(s.image);
+        if(i === 0){ img.fetchPriority = 'high'; } else { img.loading = 'lazy'; }
         img.style.setProperty('--banner-pos-desktop', imgPos(s.image));
         img.style.setProperty('--banner-pos-mobile', imgPos(s.imageMobile));
         img.alt = s.title || '';
@@ -3014,6 +3015,7 @@
         const img = document.createElement('img');
         img.className = 'banner-img';
         img.src = imgSrc(s.image);
+        if(i === 0){ img.fetchPriority = 'high'; } else { img.loading = 'lazy'; }
         img.style.setProperty('--banner-pos-desktop', imgPos(s.image));
         img.style.setProperty('--banner-pos-mobile', imgPos(s.image));
         img.alt = s.title || '';
@@ -5528,6 +5530,10 @@
   });
 
   const pushBtn = document.getElementById('pushBtn');
+  const iosPushOverlay = document.getElementById('iosPushOverlay');
+  const iosPushOk = document.getElementById('iosPushOk');
+  if(iosPushOk) iosPushOk.addEventListener('click', ()=> iosPushOverlay.classList.remove('show'));
+  if(iosPushOverlay) iosPushOverlay.addEventListener('click', (e)=>{ if(e.target===iosPushOverlay) iosPushOverlay.classList.remove('show'); });
   if(pushBtn){
     if(window.fbPushActivado && window.fbPushActivado()) pushBtn.classList.add('active');
     pushBtn.addEventListener('click', async ()=>{
@@ -5538,7 +5544,8 @@
         setTimeout(()=> pushBtn.classList.remove('pulse'), 650);
         showToast('¡Notificaciones activadas!');
       }catch(e){
-        showToast(e.message || 'No se pudo activar las notificaciones.');
+        if(e.message === 'IOS_NO_INSTALADA') iosPushOverlay.classList.add('show');
+        else showToast(e.message || 'No se pudo activar las notificaciones.');
       }
     });
   }
