@@ -317,8 +317,13 @@ async function handleSendNotification(request, env) {
         body: JSON.stringify({
           message: {
             token,
-            notification: { title, body: message },
-            webpush: { notification: { icon: 'https://tiendapoke.com/icon-192.png' }, fcm_options: { link: link || 'https://tiendapoke.com/' } }
+            data: {
+              title: String(title),
+              body: String(message),
+              link: link || 'https://tiendapoke.com/',
+              icon: 'https://tiendapoke.com/icon-192.png'
+            },
+            webpush: { fcm_options: { link: link || 'https://tiendapoke.com/' } }
           }
         })
       });
