@@ -3769,6 +3769,13 @@
 
 
   // Abre el catálogo completo aplicando un filtro concreto (para los mosaicos).
+  // El banner de "Ofertas" no tiene chip visible que lo represente; si queda activo
+  // y el usuario busca algo, hay que soltarlo para no limitar la búsqueda a esas ofertas.
+  // Los chips "Preventa" y "Sueltos" sí son visibles, así que la búsqueda los respeta.
+  function limpiarFiltrosDeBanner(){
+    if(window._soloOfertas) window._soloOfertas = false;
+  }
+
   function irACatalogoConFiltro(tipo){
     // limpia filtros previos
     currentFilter = 'all';
@@ -4819,6 +4826,9 @@
     filterChips.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
     chip.classList.add('active');
     currentFilter = chip.dataset.filter;
+    window._soloOfertas = false;
+    showOnlyMix = false;
+    if(mixToggle) mixToggle.classList.remove('active');
     render();
   });
 
@@ -4912,6 +4922,7 @@
 
   searchInput.addEventListener('input', (e)=>{
     searchTerm = e.target.value;
+    if(searchTerm.trim()) limpiarFiltrosDeBanner();
     sincronizarBuscadores(searchInput);
     if(searchTerm.trim()) abrirCatalogoCompleto();
     render();
@@ -4920,6 +4931,7 @@
   if(catalogoSearchInput){
     catalogoSearchInput.addEventListener('input', (e)=>{
       searchTerm = e.target.value;
+      if(searchTerm.trim()) limpiarFiltrosDeBanner();
       sincronizarBuscadores(catalogoSearchInput);
       if(searchTerm.trim()) abrirCatalogoCompleto();
       render();
@@ -4952,6 +4964,7 @@
     // Buscador compacto -> sincroniza con el principal
     compactSearchInput.addEventListener('input', (e)=>{
       searchTerm = e.target.value;
+      if(searchTerm.trim()) limpiarFiltrosDeBanner();
       sincronizarBuscadores(compactSearchInput);
       if(searchTerm.trim()) abrirCatalogoCompleto();
       render();
