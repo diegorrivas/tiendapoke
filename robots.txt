@@ -1,0 +1,5 @@
+# La Tienda de Meowth — tiendapoke.com
+User-agent: *
+Allow: /
+
+Sitemap: https://tiendapoke.com/sitemap.xml
