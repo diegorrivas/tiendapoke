@@ -3484,7 +3484,7 @@
     return tokens.every(tok=>{
       if(nt.includes(tok)) return true;
       if(tok.length <= 3) return false; // términos muy cortos: sin tolerancia a errores, evita falsos positivos
-      const maxDist = tok.length <= 5 ? 1 : 2;
+      const maxDist = tok.length <= 5 ? 1 : (tok.length <= 8 ? 1 : 2);
       return words.some(w=>{
         if(w.includes(tok)) return true;
         if(Math.abs(w.length - tok.length) > maxDist) {
