@@ -1,8 +1,0 @@
-name = "tiendapoke"
-main = "worker.js"
-compatibility_date = "2026-07-26"
-
-[assets]
-directory = "./"
-binding = "ASSETS"
-not_found_handling = "404-page"
