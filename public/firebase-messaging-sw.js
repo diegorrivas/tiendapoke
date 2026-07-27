@@ -14,13 +14,12 @@ const messaging = firebase.messaging();
 
 // Notificación cuando la pestaña está cerrada o en segundo plano.
 messaging.onBackgroundMessage((payload) => {
-  const n = payload.notification || {};
-  const link = (payload.fcmOptions && payload.fcmOptions.link) || '/';
-  self.registration.showNotification(n.title || 'La Tienda de Meowth', {
-    body: n.body || '',
-    icon: '/icon-192.png',
+  const d = payload.data || {};
+  self.registration.showNotification(d.title || 'La Tienda de Meowth', {
+    body: d.body || '',
+    icon: d.icon || '/icon-192.png',
     badge: '/icon-192.png',
-    data: { url: link }
+    data: { url: d.link || '/' }
   });
 });
 

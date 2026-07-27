@@ -32,6 +32,9 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebas
   // Cloud Messaging -> pestaña "Web configuration" -> "Generate key pair".
   const VAPID_KEY = "BKGBjWh-SmLfXJSNVCmrBZUAowlw3ixiLye92bDLeNDqoMQhqDMP1hjDPn33ir0OT7Qq53Za_W7xayc6MUhZ2G0";
   window.fbEnablePush = async function(){
+    const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const instalada = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    if(esIOS && !instalada) throw new Error('En iPhone, primero agrega esta web a tu pantalla de inicio (compartir → Agregar a inicio) y ábrela desde ahí para activar notificaciones.');
     if(!('serviceWorker' in navigator) || !('Notification' in window)) throw new Error('Este navegador no soporta notificaciones.');
     const permiso = await Notification.requestPermission();
     if(permiso !== 'granted') throw new Error('Permiso de notificaciones denegado.');
