@@ -33,12 +33,43 @@ async function loadPosts() {
     return (data.documents || []).map(parseFsDoc);
   } catch (e) { return []; }
 }
+async function loadProducts() {
+  try {
+    const base = 'https://firestore.googleapis.com/v1/projects/tiendameowth/databases/(default)/documents/catalogo';
+    const metaRes = await fetch(base + '/meta');
+    if (!metaRes.ok) return [];
+    const meta = parseFsDoc(await metaRes.json());
+    const partes = meta.partes || 0;
+    const out = [];
+    for (let i = 0; i < partes; i++) {
+      const r = await fetch(base + '/parte_' + i);
+      if (!r.ok) continue;
+      const doc = await r.json();
+      const fields = doc.fields || {};
+      const items = fields.items && fields.items.arrayValue && fields.items.arrayValue.values || [];
+      items.forEach(v => out.push(parseFsMapValue(v)));
+    }
+    return out;
+  } catch (e) { return []; }
+}
+function parseFsMapValue(v) {
+  if (!v || !v.mapValue) return {};
+  const out = {};
+  const fields = v.mapValue.fields || {};
+  for (const k in fields) {
+    const f = fields[k];
+    if (f.arrayValue) out[k] = (f.arrayValue.values || []).map(x => parseFsMapValue(x) && Object.keys(parseFsMapValue(x)).length ? parseFsMapValue(x) : fsValue(x));
+    else out[k] = fsValue(f);
+  }
+  return out;
+}
 function isoDate(ts) {
   try { return new Date(ts).toISOString().slice(0, 10); } catch (e) { return new Date().toISOString().slice(0, 10); }
 }
 
 async function handleSitemap() {
   const posts = await loadPosts();
+  const products = await loadProducts();
   const urls = [
     { loc: 'https://tiendapoke.com/', lastmod: new Date().toISOString().slice(0, 10), priority: '1.0' },
     { loc: 'https://tiendapoke.com/blog.html', lastmod: new Date().toISOString().slice(0, 10), priority: '0.8' },
@@ -46,6 +77,11 @@ async function handleSitemap() {
       loc: 'https://tiendapoke.com/blog.html?post=' + encodeURIComponent(p.id),
       lastmod: isoDate(p.createdAt),
       priority: '0.6'
+    })),
+    ...products.filter(p => p.status !== 'vendido').map(p => ({
+      loc: 'https://tiendapoke.com/?producto=' + encodeURIComponent(p.id),
+      lastmod: isoDate(p.createdAt || Date.now()),
+      priority: '0.5'
     }))
   ];
   const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
@@ -155,11 +191,67 @@ async function handleBlogHtml(request, env, url) {
     .transform(assetRes);
 }
 
+function imgSrc(im) { return (im && typeof im === 'object') ? (im.src || '') : (im || ''); }
+
+async function handleIndexHtml(request, env, url) {
+  const assetRes = await env.ASSETS.fetch(request);
+  const ua = request.headers.get('user-agent') || '';
+  if (!BOT_RE.test(ua)) return assetRes;
+
+  const productId = url.searchParams.get('producto');
+  if (!productId) return assetRes;
+
+  const products = await loadProducts();
+  const p = products.find(x => String(x.id) === productId);
+  if (!p) return assetRes;
+
+  const desc = (p.desc || ('Disponible en La Tienda de Meowth: ' + p.name + '.')).slice(0, 160);
+  const title = p.name + ' · La Tienda de Meowth';
+  const canonical = 'https://tiendapoke.com/?producto=' + encodeURIComponent(p.id);
+  const img = (Array.isArray(p.images) && p.images.length) ? imgSrc(p.images[0]) : 'https://tiendapoke.com/logo.png';
+  const jsonLd = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'Product',
+    name: p.name, description: desc, image: img, url: canonical,
+    offers: {
+      '@type': 'Offer', priceCurrency: 'PEN', price: p.price,
+      availability: p.status === 'vendido' ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock'
+    }
+  });
+  const seoHtml = '<section>'
+    + '<p><a href="/">← Todo el catálogo</a></p>'
+    + '<h1>' + esc(p.name) + '</h1>'
+    + (img ? '<img src="' + esc(img) + '" alt="' + esc(p.name) + '">' : '')
+    + '<p>' + esc(desc) + '</p>'
+    + '<p>S/ ' + esc(String(p.price)) + '</p>'
+    + '</section>';
+
+  class TextSetter { constructor(text) { this.text = text; } element(el) { el.setInnerContent(this.text); } }
+  class AttrSetter { constructor(attr, val) { this.attr = attr; this.val = val; } element(el) { el.setAttribute(this.attr, this.val); } }
+  class JsonLdSetter { constructor(json) { this.json = json; } element(el) { el.setInnerContent(this.json); } }
+  class BodyAppender { constructor(html) { this.html = html; } element(el) { el.prepend(this.html, { html: true }); } }
+
+  return new HTMLRewriter()
+    .on('title', new TextSetter(title))
+    .on('#metaDesc', new AttrSetter('content', desc))
+    .on('#metaCanonical', new AttrSetter('href', canonical))
+    .on('#metaOgUrl', new AttrSetter('content', canonical))
+    .on('#metaOgType', new AttrSetter('content', 'product'))
+    .on('#metaOgTitle', new AttrSetter('content', title))
+    .on('#metaOgDesc', new AttrSetter('content', desc))
+    .on('#metaOgImage', new AttrSetter('content', img))
+    .on('#metaTwTitle', new AttrSetter('content', title))
+    .on('#metaTwDesc', new AttrSetter('content', desc))
+    .on('#productJsonLd', new JsonLdSetter(jsonLd))
+    .on('body', new BodyAppender(seoHtml))
+    .transform(assetRes);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === '/sitemap.xml') return handleSitemap();
     if (url.pathname === '/blog.html') return handleBlogHtml(request, env, url);
+    if (url.pathname === '/' || url.pathname === '/index.html') return handleIndexHtml(request, env, url);
     return env.ASSETS.fetch(request);
   }
 };

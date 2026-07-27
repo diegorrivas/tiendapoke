@@ -910,6 +910,7 @@
 
   function openQuickView(p){
     updateSeoForProduct(p);
+    history.replaceState(null, '', location.pathname + '?producto=' + encodeURIComponent(p.id));
     const qvScrollEl = document.querySelector('.qv-scroll');
     if(qvScrollEl) qvScrollEl.scrollTop = 0;
     qvImages = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
@@ -1326,7 +1327,7 @@
   }
 
   function copyProductLink(p){
-    const url = location.href.split('#')[0] + '#producto=' + encodeURIComponent(p.id);
+    const url = location.pathname + '?producto=' + encodeURIComponent(p.id);
     const txt = p.name + ' — ' + money(p.price) + '\n' + url;
     const aviso = ()=> showToast('Link copiado ✓ pégalo en tu mensaje');
     if(navigator.clipboard && navigator.clipboard.writeText){
@@ -1340,7 +1341,7 @@
     const priceTxt = (p.oldPrice && p.oldPrice > p.price)
       ? `${money(p.price)} (antes ${money(p.oldPrice)})`
       : money(p.price);
-    const url = location.href.split('#')[0] + '#producto=' + encodeURIComponent(p.id);
+    const url = location.pathname + '?producto=' + encodeURIComponent(p.id);
     const text = `${p.name} — ${priceTxt}\nMíralo en el catálogo de La Tienda de Meowth 🐱`;
     const full = text + '\n' + url;
 
@@ -1390,7 +1391,7 @@
     }
     const title = p.name + ' · La Tienda de Meowth';
     const desc = (p.desc || ('Disponible en La Tienda de Meowth: ' + p.name + '.')).slice(0,160);
-    const url = 'https://tiendapoke.com/#producto=' + encodeURIComponent(p.id);
+    const url = 'https://tiendapoke.com/?producto=' + encodeURIComponent(p.id);
     const img = (p.images && p.images.length) ? imgSrc(p.images[0]) : DEFAULT_META.image;
     document.title = title;
     setMetaAttr('metaDesc','content',desc);
@@ -1418,6 +1419,7 @@
     qvOverlay.classList.remove('show');
     document.body.style.overflow = '';
     updateSeoForProduct(null);
+    history.replaceState(null, '', location.pathname);
   }
   qvClose.addEventListener('click', closeQuickView);
 
@@ -1604,12 +1606,13 @@
 
   // Si alguien abrió un link compartido de un producto, se lo mostramos directo.
   function abrirProductoCompartido(){
+    const q = new URLSearchParams(location.search).get('producto');
     const hashMatch = location.hash.match(/^#producto=(.+)$/);
-    if(!hashMatch) return;
-    const sharedId = decodeURIComponent(hashMatch[1]);
+    const sharedId = q ? decodeURIComponent(q) : (hashMatch ? decodeURIComponent(hashMatch[1]) : null);
+    if(!sharedId) return;
     const sharedProduct = products.find(p=> p.id === sharedId);
     if(sharedProduct) openQuickView(sharedProduct);
-    history.replaceState(null, '', location.pathname + location.search);
+    else history.replaceState(null, '', location.pathname);
   }
 
   // Al entrar al panel se leen los productos desde su fuente real (uno por uno)
