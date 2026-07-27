@@ -157,6 +157,9 @@
   .brand-tag{margin:6px 0 0;color:var(--cream-dim);font-size:14px;letter-spacing:.01em;line-height:1.45;max-width:520px;}
   .brand-tag b{color:var(--gold); font-weight:700;}
   .socials{display:flex;gap:10px; align-self:center; flex:none;}
+  @media (max-width:520px){
+    .socials{flex-direction:column; align-items:center;}
+  }
   .theme-btn{
     width:40px;height:40px;border-radius:999px; flex:none;
     background:color-mix(in srgb, var(--gold) 6%, transparent);
@@ -180,8 +183,9 @@
   #pushBtn.active{background:var(--gold); color:var(--ink); border-color:var(--gold);}
   #pushBtn:not(.active){
     background:color-mix(in srgb, var(--gold) 16%, transparent);
-    border-color:var(--gold); color:var(--gold); animation:pushBounce 2.2s ease infinite;
+    border-color:var(--gold); color:var(--gold);
   }
+  #pushBtn:not(.active) svg{animation:bellRing 2.4s ease infinite; transform-origin:50% 15%;}
   #pushBtn.pulse::after{
     content:''; position:absolute; inset:-4px; border-radius:999px; border:2px solid var(--gold);
     animation:pushPulse .6s ease-out;
@@ -191,7 +195,11 @@
     background:var(--red); border:2px solid var(--surface); display:none;
   }
   #pushBtn:not(.active) .push-dot{display:block;}
-  @keyframes pushBounce{0%,55%,100%{transform:translateY(0) scale(1);} 68%{transform:translateY(-6px) scale(1.08);} 78%{transform:translateY(0) scale(1);} 88%{transform:translateY(-3px);} 100%{transform:translateY(0);}}
+  @keyframes bellRing{
+    0%,55%,100%{transform:rotate(0);}
+    60%{transform:rotate(-16deg);} 66%{transform:rotate(13deg);} 72%{transform:rotate(-10deg);}
+    78%{transform:rotate(7deg);} 84%{transform:rotate(-4deg);} 90%{transform:rotate(2deg);}
+  }
   @keyframes pushPulse{0%{opacity:.9; transform:scale(1);} 100%{opacity:0; transform:scale(1.5);}}
   .push-wave{
     position:absolute; top:50%; width:9px; height:2px; border-radius:2px; background:var(--gold);
