@@ -3483,7 +3483,8 @@
     const tokens = t.split(/\s+/).filter(Boolean);
     return tokens.every(tok=>{
       if(nt.includes(tok)) return true;
-      const maxDist = tok.length <= 4 ? 1 : 2;
+      if(tok.length <= 3) return false; // términos muy cortos: sin tolerancia a errores, evita falsos positivos
+      const maxDist = tok.length <= 5 ? 1 : 2;
       return words.some(w=>{
         if(w.includes(tok)) return true;
         if(Math.abs(w.length - tok.length) > maxDist) {
