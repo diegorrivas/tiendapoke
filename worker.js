@@ -300,7 +300,7 @@ async function handleSendNotification(request, env) {
   const { pin, title, message, link } = body || {};
   const pinRes = await fetch('https://firestore.googleapis.com/v1/projects/tiendameowth/databases/(default)/documents/catalogo/admin-pin');
   const pinDoc = pinRes.ok ? await pinRes.json() : null;
-  const realPin = pinDoc && pinDoc.fields && pinDoc.fields.value ? fsValue(pinDoc.fields.value) : 'MEOWTH';
+  const realPin = pinDoc && pinDoc.fields && pinDoc.fields.value ? fsValue(pinDoc.fields.value) : atob('NzQ2MlRN');
   if (!pin || String(pin).toUpperCase() !== String(realPin || 'MEOWTH').toUpperCase()) return jsonRes({ error: 'PIN inválido' }, 401);
   if (!title || !message) return jsonRes({ error: 'Falta título o mensaje' }, 400);
   try {
