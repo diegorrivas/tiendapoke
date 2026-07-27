@@ -30,7 +30,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebas
   // ---------- notificaciones push ----------
   // La clave VAPID se genera en Firebase Console: Configuración del proyecto ->
   // Cloud Messaging -> pestaña "Web configuration" -> "Generate key pair".
-  const VAPID_KEY = "PON_AQUI_TU_CLAVE_VAPID";
+  const VAPID_KEY = "BKGBjWh-SmLfXJSNVCmrBZUAowlw3ixiLye92bDLeNDqoMQhqDMP1hjDPn33ir0OT7Qq53Za_W7xayc6MUhZ2G0";
   window.fbEnablePush = async function(){
     if(!('serviceWorker' in navigator) || !('Notification' in window)) throw new Error('Este navegador no soporta notificaciones.');
     const permiso = await Notification.requestPermission();
