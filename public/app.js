@@ -4403,6 +4403,7 @@
     pendingRelated = Array.isArray(p.related) ? p.related.slice() : [];
     renderRelatedChosen();
     if(relatedSearchEl) relatedSearchEl.value = '';
+    renderThumbStrip();
     if(relatedResultsEl) relatedResultsEl.classList.remove('show');
     expectedDateInput.value = p.expectedDate || '';
     youtubeInput.value = p.youtubeUrl || '';
