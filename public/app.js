@@ -5242,6 +5242,8 @@
     exportBtn.classList.toggle('show', isAdmin);
     importBtn.classList.toggle('show', isAdmin);
     sheetBtn.classList.toggle('show', isAdmin);
+    if(compressBtn) compressBtn.classList.toggle('show', isAdmin);
+    if(notifBtn) notifBtn.classList.toggle('show', isAdmin);
     bannerBtn.classList.toggle('show', isAdmin);
     textsBtn.classList.toggle('show', isAdmin);
     if(isAdmin) resetIdleTimer(); else clearTimeout(idleTimer);
