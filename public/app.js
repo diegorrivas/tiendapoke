@@ -3520,7 +3520,7 @@
     const term = searchTerm.trim().toLowerCase();
     const filtered = sortProducts(products.filter(p=>{
       if(currentFilter === 'all'){
-        if(p.status === 'vendido') return false;
+        if(p.status === 'vendido' && !term) return false;
       } else if(p.status !== currentFilter){
         return false;
       }
