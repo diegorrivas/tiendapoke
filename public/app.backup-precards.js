@@ -14,7 +14,17 @@
   let activeCategories = new Set();
   let precioMin = null;   // filtro de precio: desde
   let precioMax = null;   // filtro de precio: hasta
+  let showFavsOnly = false;
   let showOnlyMix = false;
+  let favorites = new Set();
+  const FAVS_KEY = 'favorites';
+  try{
+    const rawFavs = localStorage.getItem(FAVS_KEY);
+    if(rawFavs) favorites = new Set(JSON.parse(rawFavs));
+  }catch(e){}
+  function saveFavorites(){
+    try{ localStorage.setItem(FAVS_KEY, JSON.stringify([...favorites])); }catch(e){}
+  }
   let inquiryList = [];
   const INQUIRY_KEY = 'inquiry-list';
   try{
@@ -85,10 +95,29 @@
     const rect = loadMoreWrap.getBoundingClientRect();
     if(rect.top < window.innerHeight + 300) renderNextPage();
   }, {passive:true});
+  const favToggle = document.getElementById('favToggle');
+  const favCount = document.getElementById('favCount');
   const mixToggle = document.getElementById('mixToggle');
   mixToggle.addEventListener('click', ()=>{
     showOnlyMix = !showOnlyMix;
     mixToggle.classList.toggle('active', showOnlyMix);
+    render();
+  });
+
+  function updateFavToggle(){
+    const n = favorites.size;
+    favCount.textContent = n;
+    favCount.classList.toggle('show', n > 0);
+    favToggle.classList.toggle('active', showFavsOnly);
+  }
+
+  favToggle.addEventListener('click', ()=>{
+    if(favorites.size === 0 && !showFavsOnly){
+      showToast('Aún no tienes favoritos. Toca el corazón en un producto.');
+      return;
+    }
+    showFavsOnly = !showFavsOnly;
+    updateFavToggle();
     render();
   });
 
@@ -138,25 +167,6 @@
     saveInquiryListStorage();
     updateInquiryBadge();
     renderInquiryModal();
-    showToast('Quitado de tu lista');
-    actualizarBotonesAgregar(productId);
-  }
-
-  const CART_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L22 8H6.2"/><circle cx="9.5" cy="20" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg>';
-  const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>';
-  // Refleja en TODAS las tarjetas visibles del mismo producto (puede repetirse en
-  // "Recién llegados" y en el catálogo) si está o no en el carrito, con animación.
-  function actualizarBotonesAgregar(productId){
-    const enCarrito = inquiryList.some(it=> it.id === productId);
-    document.querySelectorAll('.card[data-pid="' + productId + '"] .card-add-icon').forEach(btn=>{
-      btn.classList.remove('bump-add', 'bump-remove');
-      void btn.offsetWidth;
-      btn.classList.toggle('added', enCarrito);
-      btn.innerHTML = enCarrito ? CHECK_SVG : CART_SVG;
-      btn.title = enCarrito ? 'Quitar del carrito' : 'Agregar al carrito';
-      btn.setAttribute('aria-label', btn.title);
-      btn.classList.add(enCarrito ? 'bump-add' : 'bump-remove');
-    });
   }
 
   function updateInquiryQty(productId, newQty, variantId){
@@ -326,16 +336,6 @@
   const lotBtn = document.getElementById('lotBtn');
   const searchInput = document.getElementById('heroSearchInput');
   const filterChips = document.getElementById('filterChips');
-  const chipThumb = document.getElementById('chipThumb');
-  function moveChipThumb(){
-    if(!chipThumb) return;
-    const active = filterChips.querySelector('.chip.active');
-    if(!active){ chipThumb.style.width = '0'; return; }
-    chipThumb.style.width = active.offsetWidth + 'px';
-    chipThumb.style.transform = 'translateX(' + active.offsetLeft + 'px)';
-  }
-  window.addEventListener('resize', moveChipThumb);
-  setTimeout(moveChipThumb, 0);
   const categoryChips = document.getElementById('categoryChips');
   (function(){
     const dotsWrap = document.getElementById('categoryScrollDots');
@@ -355,14 +355,6 @@
   })();  const themeToggle = document.getElementById('themeToggle');
   const sortBtn = document.getElementById('sortBtn');
   const sortMenu = document.getElementById('sortMenu');
-  function moveSortThumb(menu){
-    if(!menu) return;
-    const thumb = menu.querySelector('.sort-thumb');
-    const active = menu.querySelector('.sort-option.active');
-    if(!thumb || !active) return;
-    thumb.style.height = active.offsetHeight + 'px';
-    thumb.style.transform = 'translateY(' + active.offsetTop + 'px)';
-  }
   const exportBtn = document.getElementById('exportBtn');
   const importBtn = document.getElementById('importBtn');
   const importFile = document.getElementById('importFile');
@@ -1275,6 +1267,25 @@
     wa.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L4 20l1.2-4.2A8.5 8.5 0 1 1 21 11.5Z"/><path d="M8.5 10.3c.2 2.2 2 4 4.2 4.2" stroke-linecap="round"/></svg><span>WhatsApp</span>';
     actions.appendChild(wa);
     updateVariantFooter();
+
+    const qvFavBtn = document.createElement('button');
+    qvFavBtn.type = 'button';
+    qvFavBtn.className = 'qv-share-btn qv-fav-btn' + (favorites.has(p.id) ? ' active' : '');
+    qvFavBtn.title = 'Guardar en favoritos';
+    qvFavBtn.setAttribute('aria-label', 'Guardar en favoritos');
+    qvFavBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
+    qvFavBtn.addEventListener('click', ()=>{
+      if(favorites.has(p.id)) favorites.delete(p.id);
+      else favorites.add(p.id);
+      saveFavorites();
+      qvFavBtn.classList.toggle('active', favorites.has(p.id));
+      document.querySelectorAll('.card[data-pid="' + p.id + '"] .fav-btn').forEach(btn=>{
+        btn.classList.toggle('active', favorites.has(p.id));
+      });
+      updateFavToggle();
+      if(showFavsOnly && favorites.size === 0){ showFavsOnly = false; updateFavToggle(); render(true); }
+    });
+    actions.appendChild(qvFavBtn);
 
     const shareBtn = document.createElement('button');
     shareBtn.type = 'button';
@@ -3430,20 +3441,7 @@
   }
 
   function money(v){
-    const n = Number(v);
-    // Los precios nunca llevan centavos (siempre son montos enteros).
-    return 'S/\u00A0' + (Number.isInteger(n) ? n : Math.round(n));
-  }
-
-  // Versión con la moneda y los centavos (si los hay) en superíndice, para las
-  // tarjetas de producto. Si el precio es un entero no se agrega nada de más.
-  function moneyHtml(v){
-    const n = Number(v);
-    const whole = Math.floor(n);
-    const cents = Math.round((n - whole) * 100);
-    let html = '<span class="price-currency">S/</span>' + whole;
-    if(cents > 0) html += '<sup class="price-cents">' + String(cents).padStart(2,'0') + '</sup>';
-    return html;
+    return 'S/\u00A0' + Number(v).toFixed(2);
   }
 
   function stateLabel(s){
@@ -3524,6 +3522,7 @@
       } else if(p.status !== currentFilter){
         return false;
       }
+      if(showFavsOnly && !favorites.has(p.id)) return false;
       if(showOnlyMix && !(Array.isArray(p.variants) && p.variants.length)) return false;
       if(activeCategories.size > 0 && !activeCategories.has(p.category || 'otros')) return false;
       const _precio = Number(p.price) || 0;
@@ -3645,7 +3644,7 @@
     const teaser = document.getElementById('catalogTeaserSection');
     const fullView = document.getElementById('catalogFullView');
     if(teaser) teaser.style.display = 'none';
-    if(fullView && fullView.style.display === 'none'){ fullView.style.display = 'block'; moveChipThumb(); }
+    if(fullView && fullView.style.display === 'none') fullView.style.display = 'block';
   }
 
   // Cierra el catálogo completo y vuelve al adelanto. Se usa al navegar a otras
@@ -3804,7 +3803,6 @@
     if(currentFilter === 'all') return;
     currentFilter = 'all';
     filterChips.querySelectorAll('.chip').forEach(c=> c.classList.toggle('active', c.dataset.filter === 'all'));
-    moveChipThumb();
   }
 
   function irACatalogoConFiltro(tipo){
@@ -3832,7 +3830,6 @@
     // reflejar en los chips de filtro
     const fc = document.getElementById('filterChips');
     if(fc) fc.querySelectorAll('.chip').forEach(c=> c.classList.toggle('active', c.dataset.filter === currentFilter));
-    moveChipThumb();
     abrirCatalogoCompleto();
     render();
     const target = document.querySelector('#catalogFullView .catalogo-title');
@@ -3930,12 +3927,34 @@
       }
       if(p.shiny){
         media.insertAdjacentHTML('beforeend',
-          '<span class="badge-shiny">'+SPARK_SVG+' TOP</span>' +
+          '<span class="badge-shiny">'+SPARK_SVG+' Shiny</span>' +
           '<span class="sh-spark a">'+SPARK_SVG+'</span>' +
           '<span class="sh-spark b">'+SPARK_SVG+'</span>' +
           '<span class="sh-spark c">'+SPARK_SVG+'</span>');
       }
 
+      const favBtn = document.createElement('button');
+      favBtn.type = 'button';
+      favBtn.className = 'fav-btn' + (favorites.has(p.id) ? ' active' : '');
+      favBtn.title = 'Guardar en favoritos';
+      favBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
+      favBtn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        if(favorites.has(p.id)) favorites.delete(p.id);
+        else favorites.add(p.id);
+        saveFavorites();
+        // Un mismo producto puede aparecer duplicado (catálogo + "Recién llegados"),
+        // así que reflejamos el cambio en todas las copias, no solo en la que se tocó.
+        document.querySelectorAll('.card[data-pid="' + p.id + '"] .fav-btn').forEach(btn=>{
+          btn.classList.toggle('active', favorites.has(p.id));
+        });
+        updateFavToggle();
+        if(showFavsOnly){
+          if(favorites.size === 0){ showFavsOnly = false; updateFavToggle(); }
+          render(true);
+        }
+      });
+      media.appendChild(favBtn);
 
       if(images.length){
         let idx = 0;
@@ -4051,9 +4070,20 @@
         priceEl.className = 'card-price' + (p.status==='vendido' ? ' vendido-price' : '');
         priceEl.textContent = money(p.price);
       }
+      body.appendChild(priceEl);
 
-      if(Array.isArray(p.variants) && p.variants.length){
-        body.appendChild(priceEl);
+      if(p.status !== 'vendido' && !(Array.isArray(p.variants) && p.variants.length)){
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'card-add-btn';
+        addBtn.setAttribute('aria-label', 'Agregar al carrito');
+        addBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L22 8H6.2"/><circle cx="9.5" cy="20" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg><span>Agregar al carrito</span>';
+        addBtn.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          addToInquiryList(p.id);
+        });
+        body.appendChild(addBtn);
+      } else if(Array.isArray(p.variants) && p.variants.length){
         const variosBtn = document.createElement('button');
         variosBtn.type = 'button';
         variosBtn.className = 'card-add-btn card-variants-btn';
@@ -4064,27 +4094,6 @@
           openQuickView(p);
         });
         body.appendChild(variosBtn);
-      } else {
-        const priceRow = document.createElement('div');
-        priceRow.className = 'card-price-row';
-        priceRow.appendChild(priceEl);
-        if(p.status !== 'vendido'){
-          const enCarrito = inquiryList.some(it=> it.id === p.id);
-          const addBtn = document.createElement('button');
-          addBtn.type = 'button';
-          addBtn.className = 'card-add-icon' + (enCarrito ? ' added' : '');
-          addBtn.title = enCarrito ? 'Quitar del carrito' : 'Agregar al carrito';
-          addBtn.setAttribute('aria-label', addBtn.title);
-          addBtn.innerHTML = enCarrito ? CHECK_SVG : CART_SVG;
-          addBtn.addEventListener('click', (e)=>{
-            e.stopPropagation();
-            const yaEstaba = inquiryList.some(it=> it.id === p.id);
-            if(yaEstaba) removeFromInquiryList(p.id);
-            else{ addToInquiryList(p.id); actualizarBotonesAgregar(p.id); }
-          });
-          priceRow.appendChild(addBtn);
-        }
-        body.appendChild(priceRow);
       }
 
       if(isAdmin && modoSeleccion){
@@ -4849,7 +4858,6 @@
     window._soloOfertas = false;
     showOnlyMix = false;
     if(mixToggle) mixToggle.classList.remove('active');
-    moveChipThumb();
     render();
   });
 
@@ -4945,14 +4953,12 @@
   sortBtn.addEventListener('click', (e)=>{
     e.stopPropagation();
     sortMenu.classList.toggle('show');
-    if(sortMenu.classList.contains('show')) moveSortThumb(sortMenu);
   });
   sortMenu.addEventListener('click', (e)=>{
     const opt = e.target.closest('.sort-option');
     if(!opt) return;
     sortMenu.querySelectorAll('.sort-option').forEach(o=>o.classList.remove('active'));
     opt.classList.add('active');
-    moveSortThumb(sortMenu);
     sortBtn.classList.toggle('active', opt.dataset.sort !== 'recientes');
     currentSort = opt.dataset.sort;
     sortMenu.classList.remove('show');
@@ -5031,17 +5037,14 @@
     compactSortBtn.addEventListener('click', (e)=>{
       e.stopPropagation();
       compactSortMenu.classList.toggle('show');
-      if(compactSortMenu.classList.contains('show')) moveSortThumb(compactSortMenu);
     });
     compactSortMenu.addEventListener('click', (e)=>{
       const opt = e.target.closest('.sort-option');
       if(!opt) return;
       compactSortMenu.querySelectorAll('.sort-option').forEach(o=>o.classList.remove('active'));
       opt.classList.add('active');
-      moveSortThumb(compactSortMenu);
       // reflejar también en el menú principal
       sortMenu.querySelectorAll('.sort-option').forEach(o=> o.classList.toggle('active', o.dataset.sort===opt.dataset.sort));
-      moveSortThumb(sortMenu);
       compactSortBtn.classList.toggle('active', opt.dataset.sort !== 'recientes');
       sortBtn.classList.toggle('active', opt.dataset.sort !== 'recientes');
       currentSort = opt.dataset.sort;
@@ -5089,7 +5092,6 @@
     searchInput.value = '';
     filterChips.querySelectorAll('.chip').forEach(c=> c.classList.toggle('active', c.dataset.filter === 'all'));
     categoryChips.querySelectorAll('.chip-light[data-category]').forEach(c=> c.classList.toggle('active', c.dataset.category === 'all'));
-    moveChipThumb();
     if(precioMinInput) precioMinInput.value = '';
     if(precioMaxInput) precioMaxInput.value = '';
     if(catalogoSearchInput) catalogoSearchInput.value = '';
@@ -5813,6 +5815,8 @@
       applyTheme(themePref);
     }
   });
+
+  updateFavToggle();
 
   // Generar manifest para poder instalar como web app en el celular
   (function(){

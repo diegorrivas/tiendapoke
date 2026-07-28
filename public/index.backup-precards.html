@@ -92,7 +92,6 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg>
       </button>
       <div class="sort-menu" id="compactSortMenu">
-        <span class="sort-thumb"></span>
         <button class="sort-option active" data-sort="recientes" type="button">Más recientes</button>
         <button class="sort-option" data-sort="ofertas" type="button">Ofertas primero</button>
         <button class="sort-option" data-sort="precio-asc" type="button">Precio: menor a mayor</button>
@@ -241,7 +240,6 @@
     </div>
     <div class="filter-row">
       <div class="chips scroll-row" id="filterChips">
-        <span class="chip-thumb" id="chipThumb"></span>
         <button class="chip active" data-filter="all">Todos</button>
         <button class="chip" data-filter="disponible">Disponible</button>
         <button class="chip" data-filter="preventa">Preventa</button>
@@ -251,12 +249,15 @@
       <button class="clear-filters-inline" id="clearFiltersInline" type="button" title="Limpiar filtros" aria-label="Limpiar filtros" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
+      <button class="fav-toggle" id="favToggle" title="Ver solo favoritos" aria-label="Ver solo favoritos">
+        <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <span class="fav-count" id="favCount"></span>
+      </button>
       <div class="sort-wrap">
         <button class="sort-btn" id="sortBtn" title="Ordenar" aria-label="Ordenar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg>
         </button>
         <div class="sort-menu" id="sortMenu">
-          <span class="sort-thumb"></span>
           <button class="sort-option active" data-sort="recientes" type="button">Más recientes</button>
           <button class="sort-option" data-sort="ofertas" type="button">Ofertas primero</button>
           <button class="sort-option" data-sort="precio-asc" type="button">Precio: menor a mayor</button>
@@ -666,7 +667,7 @@
       <label class="checkbox-label"><input type="checkbox" id="allowQuantityInput"> Tengo más de una unidad — permitir elegir cantidad en la lista de consulta</label>
     </div>
     <div class="field checkbox-field">
-      <label class="checkbox-label"><input type="checkbox" id="shinyInput"> ✦ Producto TOP — marcar como pieza destacada del catálogo</label>
+      <label class="checkbox-label"><input type="checkbox" id="shinyInput"> ✦ Producto Shiny — marcar como pieza destacada del catálogo</label>
     </div>
     <div class="modal-actions">
       <button class="btn-ghost" id="cancelBtn">Cancelar</button>
@@ -728,6 +729,32 @@
     <h2>Editar textos y detalles</h2>
 
     <div class="textos-scroll">
+    <div class="form-section-title">Quiénes somos</div>
+    <div class="field"><label>Párrafo 1</label><textarea id="txtQuienesP1" rows="3"></textarea></div>
+    <div class="field"><label>Párrafo 2</label><textarea id="txtQuienesP2" rows="3"></textarea></div>
+    <div class="field"><label>Párrafo 3</label><textarea id="txtQuienesP3" rows="3"></textarea></div>
+    <div class="field-row">
+      <div class="field"><label>Dato 1 — número</label><input type="text" id="txtStat1Num"></div>
+      <div class="field"><label>Dato 1 — descripción</label><input type="text" id="txtStat1Label"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Dato 2 — número</label><input type="text" id="txtStat2Num"></div>
+      <div class="field"><label>Dato 2 — descripción</label><input type="text" id="txtStat2Label"></div>
+    </div>
+
+    <div class="form-section-title">Foto de perfil (Quiénes somos)</div>
+    <p class="icon-editor-hint">Una foto tuya o del negocio genera confianza: se muestra junto al texto de "Quién soy". Deja vacía para no mostrar ninguna. Recomendado: foto vertical (retrato).</p>
+    <div class="logo-editor">
+      <div class="logo-editor-item">
+        <div class="logo-preview quienes-foto-prev" id="quienesFotoPrev"></div>
+        <div class="logo-editor-ctrl">
+          <label>Foto</label>
+          <input type="file" id="quienesFotoFile" accept="image/*">
+          <button type="button" class="btn-ghost logo-clear" id="quienesFotoClear" hidden>Quitar</button>
+        </div>
+      </div>
+    </div>
+
     <div class="form-section-title">Cómo te ve Google</div>
     <p class="icon-editor-hint">Así aparece tu tienda en los resultados de búsqueda. El título se ve completo hasta unos 60 caracteres y la descripción hasta unos 155.</p>
     <div class="field"><label>Título en Google</label><input type="text" id="txtSeoTitulo" placeholder="La Tienda de Meowth · Catálogo de Pokémon Center Japón en Perú"></div>
@@ -775,19 +802,17 @@
       </div>
     </div>
 
-    <div class="form-section-title">Banner principal de la portada (hero)</div>
-    <p class="icon-editor-hint">Este es el gran bloque destacado que aparece primero al entrar a la web, arriba de todo.</p>
-    <div class="field"><label>Etiqueta chica</label><input type="text" id="txtPago1Eyebrow" placeholder="Opcional — déjala vacía si no quieres etiqueta"></div>
-    <div class="field"><label>Título</label><input type="text" id="txtPago1Titulo" placeholder="Ej: Mi meta es tu felicidad"></div>
-    <div class="field"><label>Descripción</label><textarea id="txtPago1Desc" rows="2"></textarea></div>
-    <p class="icon-editor-hint">Las dos insignias que aparecen al costado del banner. Deja el número vacío si no quieres mostrar una.</p>
-    <div class="field-row">
-      <div class="field"><label>Insignia 1 — número</label><input type="text" id="txtReservaBadge1K" placeholder="100%"></div>
-      <div class="field"><label>Insignia 1 — texto</label><input type="text" id="txtReservaBadge1V" placeholder="Productos originales"></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Insignia 2 — número</label><input type="text" id="txtReservaBadge2K" placeholder="18+"></div>
-      <div class="field"><label>Insignia 2 — texto</label><input type="text" id="txtReservaBadge2V" placeholder="Años a tu lado"></div>
+    <div class="form-section-title">Ícono para eliminar (deslizar en la lista de consulta)</div>
+    <p class="icon-editor-hint">Reemplaza el ícono de basura que aparece al deslizar un producto para quitarlo de tu lista de consulta. Deja vacío para usar el ícono por defecto. Recomendado: PNG pequeño cuadrado, de un solo color o con fondo transparente.</p>
+    <div class="logo-editor">
+      <div class="logo-editor-item">
+        <div class="logo-preview" id="iconBasuraPrev"></div>
+        <div class="logo-editor-ctrl">
+          <label>Ícono de eliminar</label>
+          <input type="file" id="iconBasuraFile" accept="image/*">
+          <button type="button" class="btn-ghost logo-clear" id="iconBasuraClear" hidden>Quitar</button>
+        </div>
+      </div>
     </div>
 
     <div class="form-section-title">Títulos de secciones</div>
@@ -847,32 +872,6 @@
       </div>
     </div>
 
-    <div class="form-section-title">Quiénes somos</div>
-    <div class="field"><label>Párrafo 1</label><textarea id="txtQuienesP1" rows="3"></textarea></div>
-    <div class="field"><label>Párrafo 2</label><textarea id="txtQuienesP2" rows="3"></textarea></div>
-    <div class="field"><label>Párrafo 3</label><textarea id="txtQuienesP3" rows="3"></textarea></div>
-    <div class="field-row">
-      <div class="field"><label>Dato 1 — número</label><input type="text" id="txtStat1Num"></div>
-      <div class="field"><label>Dato 1 — descripción</label><input type="text" id="txtStat1Label"></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Dato 2 — número</label><input type="text" id="txtStat2Num"></div>
-      <div class="field"><label>Dato 2 — descripción</label><input type="text" id="txtStat2Label"></div>
-    </div>
-
-    <div class="form-section-title">Foto de perfil (Quiénes somos)</div>
-    <p class="icon-editor-hint">Una foto tuya o del negocio genera confianza: se muestra junto al texto de "Quién soy". Deja vacía para no mostrar ninguna. Recomendado: foto vertical (retrato).</p>
-    <div class="logo-editor">
-      <div class="logo-editor-item">
-        <div class="logo-preview quienes-foto-prev" id="quienesFotoPrev"></div>
-        <div class="logo-editor-ctrl">
-          <label>Foto</label>
-          <input type="file" id="quienesFotoFile" accept="image/*">
-          <button type="button" class="btn-ghost logo-clear" id="quienesFotoClear" hidden>Quitar</button>
-        </div>
-      </div>
-    </div>
-
     <div class="form-section-title">Fotos de tu viaje a Japón (Quiénes somos)</div>
     <p class="icon-editor-hint">Se muestran como una tira horizontal que se desliza en la sección "Quiénes somos". Sube una foto o pega su link, agrega un pie opcional (ej. "Pokémon Center, Tokio"), y ordénalas. Deja vacío para no mostrar ninguna.</p>
     <div id="japonEditor"></div>
@@ -892,22 +891,20 @@
     <div class="field"><label>Paso 3 — título</label><input type="text" id="txtPaso3Titulo"></div>
     <div class="field"><label>Paso 3 — descripción</label><textarea id="txtPaso3Desc" rows="2"></textarea></div>
 
-    <div class="form-section-title">Ícono para eliminar (deslizar en la lista de consulta)</div>
-    <p class="icon-editor-hint">Reemplaza el ícono de basura que aparece al deslizar un producto para quitarlo de tu lista de consulta. Deja vacío para usar el ícono por defecto. Recomendado: PNG pequeño cuadrado, de un solo color o con fondo transparente.</p>
-    <div class="logo-editor">
-      <div class="logo-editor-item">
-        <div class="logo-preview" id="iconBasuraPrev"></div>
-        <div class="logo-editor-ctrl">
-          <label>Ícono de eliminar</label>
-          <input type="file" id="iconBasuraFile" accept="image/*">
-          <button type="button" class="btn-ghost logo-clear" id="iconBasuraClear" hidden>Quitar</button>
-        </div>
-      </div>
+    <div class="form-section-title">Cómo comprar — bloque "Resérvalo"</div>
+    <p class="icon-editor-hint">Este es el bloque rojo destacado que aparece debajo de los tres pasos. Los métodos de pago (Yape, Plin, transferencia, tarjeta) ahora se muestran como etiquetas dentro del Paso 2.</p>
+    <div class="field"><label>Etiqueta chica</label><input type="text" id="txtPago1Eyebrow" placeholder="Opcional — déjala vacía si no quieres etiqueta"></div>
+    <div class="field"><label>Título</label><input type="text" id="txtPago1Titulo" placeholder="Ej: Lo quieres, ¡resérvalo!"></div>
+    <div class="field"><label>Descripción</label><textarea id="txtPago1Desc" rows="2"></textarea></div>
+    <p class="icon-editor-hint">Las dos insignias que aparecen al costado del bloque. Deja el número vacío si no quieres mostrar una.</p>
+    <div class="field-row">
+      <div class="field"><label>Insignia 1 — número</label><input type="text" id="txtReservaBadge1K" placeholder="100%"></div>
+      <div class="field"><label>Insignia 1 — texto</label><input type="text" id="txtReservaBadge1V" placeholder="Productos originales"></div>
     </div>
-
-    <div class="form-section-title">Íconos de categorías</div>
-    <p class="icon-editor-hint">Sube tu propia imagen para reemplazar el ícono de cualquier categoría, cuando quieras. Se ve mejor si es cuadrada.</p>
-    <div class="icon-editor-grid" id="iconEditorGrid"></div>
+    <div class="field-row">
+      <div class="field"><label>Insignia 2 — número</label><input type="text" id="txtReservaBadge2K" placeholder="18+"></div>
+      <div class="field"><label>Insignia 2 — texto</label><input type="text" id="txtReservaBadge2V" placeholder="Años a tu lado"></div>
+    </div>
 
     <div class="form-section-title">Pie de página (footer)</div>
     <p class="icon-editor-hint">Los textos que aparecen sobre tus redes sociales al final de la web.</p>
@@ -918,6 +915,10 @@
     <p class="icon-editor-hint">Agrega opiniones reales de tus clientes (nombre, estrellas y qué dijeron). La sección se muestra sola cuando hay al menos una, y se oculta si las quitas todas.</p>
     <div id="resenasEditor"></div>
     <button type="button" class="btn-ghost" id="addResenaBtn">+ Agregar reseña</button>
+
+    <div class="form-section-title">Íconos de categorías</div>
+    <p class="icon-editor-hint">Sube tu propia imagen para reemplazar el ícono de cualquier categoría, cuando quieras. Se ve mejor si es cuadrada.</p>
+    <div class="icon-editor-grid" id="iconEditorGrid"></div>
 
     <div class="form-section-title">Sonido al tocar "Quiénes somos" / "Cómo comprar" (opcional)</div>
     <p class="icon-editor-hint">Sube un MP3 corto para cada botón. Ojo: en iPhone con el interruptor de silencio activado, ningún sitio web puede reproducir sonido — es una restricción del sistema, no de esta función. En Android y en iPhone sin silencio, sí suena.</p>

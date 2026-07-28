@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
   import {
-    getMessaging, getToken
+    getMessaging, getToken, onMessage
   } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging.js";
   import {
     getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, writeBatch
@@ -42,6 +42,14 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
     const messaging = getMessaging(app);
     const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
     if(!token) throw new Error('No se pudo generar el token de notificaciones.');
+    // Si la pestaña está abierta y enfocada, FCM entrega el mensaje aquí en vez
+    // de al service worker — sin este listener, la notificación de bienvenida
+    // (y cualquier otra mientras navegan la web) no se vería nunca.
+    onMessage(messaging, (payload)=>{
+      const d = payload.data || {};
+      if(!d.title) return;
+      try{ new Notification(d.title, { body: d.body || '', icon: d.icon || '/icon-192.png' }); }catch(e){}
+    });
     await setDoc(doc(db, 'push_tokens', token), { token, createdAt: Date.now() });
     localStorage.setItem('push-activado', '1');
     fetch('/api/send-notification', {
