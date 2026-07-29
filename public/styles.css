@@ -19,6 +19,7 @@
     --red-text:#ffa89f;
     --card-bg:#f6f3ee;      /* hueso: tarjetas de producto */
     --card-ink:#241a10;     /* texto sobre tarjeta hueso */
+    --card-media-bg:#4a4a4c;
     --radius:16px;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 22px rgba(0,0,0,.28);
   }
@@ -52,6 +53,7 @@
     --shadow: 0 1px 3px rgba(0,0,0,.04), 0 8px 20px rgba(0,0,0,.06);
     --red-text:#b01818;
     --gold-text:#a16207;
+    --card-media-bg:#f0efec;
   }
   /* forzado manual a modo oscuro, sin importar el sistema */
   :root[data-theme="dark"]{
@@ -80,7 +82,28 @@
   button{font-family:inherit;}
 
   /* ---------- layout shell ---------- */
-  .wrap{max-width:1400px;margin:0 auto;padding:0 24px;}
+  .wrap{max-width:1600px;margin:0 auto;padding:0 clamp(24px,4vw,64px); box-sizing:border-box;}
+  /* Catálogo: en pantallas grandes usa más ancho para mostrar más columnas de producto,
+     manteniendo aire a los costados (no pegado al borde). */
+  #catalogFullView{max-width:1920px; padding-left:0; padding-right:0;}
+  #catalogoFullTitle,
+  #catalogFullView .filters-sticky,
+  #resultCount,
+  #grid,
+  #loadMoreWrap,
+  #emptyState{
+    padding-left:clamp(24px,4vw,64px); padding-right:clamp(24px,4vw,64px);
+  }
+  @media (min-width:1400px){
+    #catalogoFullTitle,
+    #catalogFullView .filters-sticky,
+    #resultCount,
+    #grid,
+    #loadMoreWrap,
+    #emptyState{
+      padding-left:clamp(32px,4vw,72px); padding-right:clamp(32px,4vw,72px);
+    }
+  }
 
   /* ---------- header ---------- */
   .trust-ticker{
@@ -97,10 +120,10 @@
     will-change:transform;
   }
   .trust-ticker-item{
-    display:inline-flex; align-items:center; color:var(--gold); font-size:12px; font-weight:800;
+    display:inline-flex; align-items:center; color:var(--cream); font-size:12px; font-weight:800;
     letter-spacing:.03em; text-transform:uppercase; padding:0 20px; white-space:nowrap;
   }
-  .trust-ticker-item::after{content:'•'; margin-left:20px; color:var(--gold); opacity:.5; font-size:14px;}
+  .trust-ticker-item::after{content:'•'; margin-left:20px; color:var(--red); opacity:.75; font-size:14px;}
   @keyframes trust-scroll{
     from{transform:translateX(0);}
     to{transform:translateX(-50%);}
@@ -645,7 +668,7 @@
   /* ---------- grid ---------- */
   .grid{
     display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr));
-    gap:26px; padding:6px 0 60px;
+    gap:36px 26px; padding:6px 0 60px;
   }
   @media (max-width:560px){
     .grid{grid-template-columns:repeat(2,1fr); gap:12px;}
@@ -689,7 +712,7 @@
   .card-img.placeholder{
     display:flex; align-items:center; justify-content:center; color:var(--cream-dim);
   }
-  .card-media{position:relative; overflow:hidden; border-radius:var(--radius); background:var(--surface); transition:transform .18s ease, box-shadow .18s ease;}
+  .card-media{position:relative; overflow:hidden; border-radius:var(--radius); background:var(--card-media-bg, var(--surface)); transition:transform .18s ease, box-shadow .18s ease;}
   .card.vendido .card-media{filter:grayscale(.35); opacity:.75;}
   /* Caja cuadrada garantizada en cualquier navegador (no depende de aspect-ratio,
      que algunos Android no aplican bien y dejaba las fotos de distinto alto).
@@ -738,9 +761,9 @@
   }
   .badge-new{
     position:absolute; bottom:10px; left:10px; z-index:3;
-    padding:4px 10px; border-radius:999px; font-size:10px; font-weight:800;
+    padding:4px 10px; border-radius:5px; font-size:10px; font-weight:800;
     text-transform:uppercase; letter-spacing:.05em;
-    background:var(--gold); color:var(--ink);
+    background:#161616; color:#fff;
     box-shadow:0 2px 8px rgba(0,0,0,.25);
   }
 
@@ -1931,8 +1954,8 @@
   #preventasSection{background:var(--z-preventas);}
   #quienesSection{background:var(--z-quienes);}
   /* respiración vertical para que cada banda de color se lea como una zona */
-  .fixed-info{padding:52px 0;}
-  .new-arrivals{padding:52px 0;}
+  .fixed-info{padding:64px 0;}
+  .new-arrivals{padding:64px 0;}
   .banner{margin-bottom:0;}
   .site-footer{margin-top:0;}
   /* la fila deslizable queda con el mismo margen a ambos lados (alineada al contenido);

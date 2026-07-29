@@ -1751,6 +1751,13 @@
       titulo: '¡Únete a la comunidad!',
       subtitulo: 'Síguenos para nuevos ingresos, preventas, ofertas y más.'
     },
+    /* Cinta deslizante de confianza, arriba del header. */
+    ticker: [
+      'Envíos a todo el Perú',
+      'Productos 100% originales',
+      'Reserva pagando una parte',
+      'Asesoría personalizada'
+    ],
     /* Logos por modo. null = usar /logo.png por defecto. */
     logos: { claro: null, oscuro: null },
     /* Íconos del botón día/noche. null = usar el sol/luna por defecto. */
@@ -2204,6 +2211,7 @@
     aplicarLogo();
     aplicarIconosTema();
     aplicarFooter();
+    aplicarTicker();
     const quienesPanel = document.getElementById('quienesSectionBody');
     if(quienesPanel){
       quienesPanel.innerHTML = '';
@@ -2812,6 +2820,13 @@
     if(fn) fn.value = F.titulo || '';
     if(ft) ft.value = F.subtitulo || '';
 
+    // Cinta de confianza
+    const TK = siteContent.ticker || [];
+    ['txtTicker1','txtTicker2','txtTicker3','txtTicker4'].forEach((id,i)=>{
+      const el = document.getElementById(id);
+      if(el) el.value = TK[i] || '';
+    });
+
     // Mosaicos de portada
     const MOS = siteContent.mosaicos || {};
     const setMos = (clave, ids)=>{
@@ -2971,7 +2986,8 @@
       footer: {
         titulo: (document.getElementById('txtFooterName').value || '').trim(),
         subtitulo: (document.getElementById('txtFooterTag').value || '').trim()
-      }
+      },
+      ticker: ['txtTicker1','txtTicker2','txtTicker3','txtTicker4'].map(id=> (document.getElementById(id).value || '').trim())
     };
     renderSiteContent();
     renderNewArrivals(); renderOfertas(); renderPreventas();
@@ -5900,15 +5916,12 @@
   })();
 
   // ---------- franja de confianza deslizante (arriba del header) ----------
-  (function(){
-    const messages = [
-      'Envíos a todo el Perú',
-      'Productos 100% originales',
-      'Reserva pagando una parte',
-      'Asesoría personalizada'
-    ];
+  function aplicarTicker(){
+    const messages = (siteContent.ticker || []).filter(m=> (m || '').trim());
+    if(!messages.length) return;
     const track = document.getElementById('trustTickerTrack');
     if(!track) return;
+    track.innerHTML = '';
     // Se duplica la lista una vez: al animar de 0% a -50% del ancho total,
     // la segunda copia entra justo cuando la primera sale, sin salto ni espacio en blanco.
     [...messages, ...messages].forEach(msg=>{
@@ -5917,7 +5930,8 @@
       el.textContent = msg;
       track.appendChild(el);
     });
-  })();
+  }
+  aplicarTicker();
 
   // Tarjetas "fantasma" mientras llegan los productos: la página se siente
   // viva de inmediato en vez de mostrar un hueco en blanco.
