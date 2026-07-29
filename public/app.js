@@ -5031,24 +5031,23 @@
     heroSearchGo.addEventListener('click', ()=> confirmarBusqueda(searchInput));
   }
 
-  // Al tocar cualquier buscador, posiciona la web en el catálogo — pero solo si
-  // el título del catálogo no está ya visible (evita saltos molestos al refocar).
-  function irACatalogoAlEnfocar(){
-    abrirCatalogoCompleto();
-    const target = document.querySelector('#catalogFullView .catalogo-title') || document.querySelector('.catalogo-title');
-    if(!target) return;
-    const r = target.getBoundingClientRect();
-    const yaVisible = r.top >= 0 && r.top < window.innerHeight * 0.6;
-    if(yaVisible) return;
-    target.scrollIntoView({behavior:'smooth', block:'start'});
-    target.classList.remove('jump-highlight');
-    requestAnimationFrame(()=>{ target.classList.add('jump-highlight'); });
-    setTimeout(()=>{ target.classList.remove('jump-highlight'); }, 750);
-  }
-  // El compacto queda excluido: aparece ya sobre el catálogo al hacer scroll,
-  // así que saltar al enfocarlo se sentía forzado.
-  [searchInput, catalogoSearchInput]
-    .forEach(inp=>{ if(inp) inp.addEventListener('focus', irACatalogoAlEnfocar); });
+  // No saltamos al enfocar: se puede escribir con calma y el salto solo pasa
+  // al confirmar con Enter o el botón Buscar (confirmarBusqueda).
+
+  // El navegador puede restaurar la página desde el caché de "atrás/adelante"
+  // (bfcache) con el catálogo completo ya abierto de una búsqueda anterior.
+  // Al volver a entrar así, se resetea a la vista normal (teaser + buscador vacío).
+  window.addEventListener('pageshow', (e)=>{
+    if(!e.persisted) return;
+    cerrarCatalogoCompleto();
+    searchTerm = '';
+    [searchInput, catalogoSearchInput, document.getElementById('compactSearchInput')]
+      .forEach(inp=>{ if(inp) inp.value = ''; });
+    const go1 = document.getElementById('heroSearchGo'); if(go1) go1.hidden = true;
+    const go2 = document.getElementById('catalogoSearchGo'); if(go2) go2.hidden = true;
+    const go3 = document.getElementById('compactSearchGo'); if(go3) go3.hidden = true;
+    render();
+  });
 
   // ---- Barra compacta: buscador, orden y mostrar/ocultar al hacer scroll ----
   (function(){
@@ -5079,6 +5078,7 @@
     compactBrand.addEventListener('click', ()=> window.scrollTo({top:0, behavior:'smooth'}));
 
     // Menú de orden compacto (refleja el mismo estado)
+    if(compactSortBtn && compactSortMenu){
     compactSortBtn.addEventListener('click', (e)=>{
       e.stopPropagation();
       compactSortMenu.classList.toggle('show');
@@ -5104,6 +5104,7 @@
         compactSortMenu.classList.remove('show');
       }
     });
+    }
 
     // Mostrar al subir, ocultar al bajar (y nunca sobre el header superior)
     let lastY = window.scrollY;
