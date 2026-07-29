@@ -352,6 +352,23 @@
     categoryChips.addEventListener('scroll', update, {passive:true});
     window.addEventListener('resize', update);
     setTimeout(update, 300);
+
+    // Botones de deslizamiento a los lados: aparecen mientras se hace scroll, se ocultan al detenerse.
+    const catPrev = document.getElementById('catScrollPrev');
+    const catNext = document.getElementById('catScrollNext');
+    let hideNavTimer = null;
+    function updateNavArrows(){
+      if(!catPrev || !catNext) return;
+      const max = categoryChips.scrollWidth - categoryChips.clientWidth;
+      if(max <= 8){ catPrev.classList.remove('show'); catNext.classList.remove('show'); return; }
+      catPrev.classList.toggle('show', categoryChips.scrollLeft > 6);
+      catNext.classList.toggle('show', categoryChips.scrollLeft < max - 6);
+      clearTimeout(hideNavTimer);
+      hideNavTimer = setTimeout(()=>{ catPrev.classList.remove('show'); catNext.classList.remove('show'); }, 900);
+    }
+    categoryChips.addEventListener('scroll', updateNavArrows, {passive:true});
+    if(catPrev) catPrev.addEventListener('click', ()=> categoryChips.scrollBy({left:-160, behavior:'smooth'}));
+    if(catNext) catNext.addEventListener('click', ()=> categoryChips.scrollBy({left:160, behavior:'smooth'}));
   })();  const themeToggle = document.getElementById('themeToggle');
   const sortBtn = document.getElementById('sortBtn');
   const sortMenu = document.getElementById('sortMenu');
@@ -4887,7 +4904,7 @@
     const hay = precioMin !== null || precioMax !== null;
     precioToggleLabel.textContent = hay
       ? `S/ ${precioMin ?? 0} – ${precioMax ?? 'sin tope'}`
-      : 'Precio';
+      : 'S/';
     precioToggle.classList.toggle('active', hay);
   }
   if(precioToggle && precioFila){
@@ -4990,6 +5007,11 @@
     catalogoSearchInput.addEventListener('keydown', (e)=>{
       if(e.key === 'Enter') confirmarBusqueda(catalogoSearchInput);
     });
+    const catalogoSearchGo = document.getElementById('catalogoSearchGo');
+    if(catalogoSearchGo){
+      catalogoSearchInput.addEventListener('input', ()=>{ catalogoSearchGo.hidden = !catalogoSearchInput.value.trim(); });
+      catalogoSearchGo.addEventListener('click', ()=> confirmarBusqueda(catalogoSearchInput));
+    }
   }
   // Enter en el buscador principal: salta directo al catálogo con el resultado,
   // y en celular cierra el teclado (el input pierde el foco).
@@ -5003,6 +5025,30 @@
   searchInput.addEventListener('keydown', (e)=>{
     if(e.key === 'Enter') confirmarBusqueda(searchInput);
   });
+  const heroSearchGo = document.getElementById('heroSearchGo');
+  if(heroSearchGo){
+    searchInput.addEventListener('input', ()=>{ heroSearchGo.hidden = !searchInput.value.trim(); });
+    heroSearchGo.addEventListener('click', ()=> confirmarBusqueda(searchInput));
+  }
+
+  // Al tocar cualquier buscador, posiciona la web en el catálogo — pero solo si
+  // el título del catálogo no está ya visible (evita saltos molestos al refocar).
+  function irACatalogoAlEnfocar(){
+    abrirCatalogoCompleto();
+    const target = document.querySelector('#catalogFullView .catalogo-title') || document.querySelector('.catalogo-title');
+    if(!target) return;
+    const r = target.getBoundingClientRect();
+    const yaVisible = r.top >= 0 && r.top < window.innerHeight * 0.6;
+    if(yaVisible) return;
+    target.scrollIntoView({behavior:'smooth', block:'start'});
+    target.classList.remove('jump-highlight');
+    requestAnimationFrame(()=>{ target.classList.add('jump-highlight'); });
+    setTimeout(()=>{ target.classList.remove('jump-highlight'); }, 750);
+  }
+  // El compacto queda excluido: aparece ya sobre el catálogo al hacer scroll,
+  // así que saltar al enfocarlo se sentía forzado.
+  [searchInput, catalogoSearchInput]
+    .forEach(inp=>{ if(inp) inp.addEventListener('focus', irACatalogoAlEnfocar); });
 
   // ---- Barra compacta: buscador, orden y mostrar/ocultar al hacer scroll ----
   (function(){
@@ -5023,6 +5069,11 @@
     compactSearchInput.addEventListener('keydown', (e)=>{
       if(e.key === 'Enter') confirmarBusqueda(compactSearchInput);
     });
+    const compactSearchGo = document.getElementById('compactSearchGo');
+    if(compactSearchGo){
+      compactSearchInput.addEventListener('input', ()=>{ compactSearchGo.hidden = !compactSearchInput.value.trim(); });
+      compactSearchGo.addEventListener('click', ()=> confirmarBusqueda(compactSearchInput));
+    }
 
     // Volver arriba al tocar el logo/nombre
     compactBrand.addEventListener('click', ()=> window.scrollTo({top:0, behavior:'smooth'}));
@@ -5912,8 +5963,10 @@
       var key = btn.getAttribute('data-open-tab');
       cerrarCatalogoCompleto();
       requestAnimationFrame(function(){
-        var section = document.getElementById(key === 'quienes' ? 'quienesSection' : 'comprarSection');
-        if(section) section.scrollIntoView({behavior:'smooth', block:'start'});
+        requestAnimationFrame(function(){
+          var section = document.getElementById(key === 'quienes' ? 'quienesSection' : 'comprarSection');
+          if(section) section.scrollIntoView({behavior:'smooth', block:'start'});
+        });
       });
     });
   });
@@ -5926,17 +5979,22 @@
   function scrollToFooter(){
     cerrarCatalogoCompleto();
     requestAnimationFrame(function(){
-      var section = document.querySelector('.site-footer');
-      if(section) section.scrollIntoView({behavior:'smooth', block:'start'});
+      requestAnimationFrame(function(){
+        var section = document.querySelector('.site-footer');
+        if(section) section.scrollIntoView({behavior:'smooth', block:'start'});
+      });
     });
   }
   if(navCatalogo) navCatalogo.addEventListener('click', openFullCatalog);
   function scrollToFixedSection(key){
     cerrarCatalogoCompleto();
     var section = document.getElementById(key === 'quienes' ? 'quienesSection' : 'comprarSection');
-    // Esperar a que el navegador reacomode la página tras cerrar el catálogo.
+    // Doble rAF: espera a que el navegador reacomode la página tras cerrar el catálogo
+    // (el teaser tarda un frame extra en recuperar su alto real).
     requestAnimationFrame(function(){
-      if(section) section.scrollIntoView({behavior:'smooth', block:'start'});
+      requestAnimationFrame(function(){
+        if(section) section.scrollIntoView({behavior:'smooth', block:'start'});
+      });
     });
     var soundUrl = siteContent.sounds && siteContent.sounds[key];
     if(soundUrl){
