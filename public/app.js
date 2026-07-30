@@ -223,7 +223,7 @@
       removeEl.className = 'inquiry-item-remove-btn';
       removeEl.setAttribute('aria-label', 'Quitar');
       removeEl.title = 'Quitar';
-      removeEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+      removeEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:block;"><path d="M9 3.5h6a1 1 0 0 1 1 1V5h3.25a.75.75 0 0 1 0 1.5H4.75a.75.75 0 0 1 0-1.5H8v-.5a1 1 0 0 1 1-1z"/><path d="M6 7.5l.9 12.15A2 2 0 0 0 8.9 21.5h6.2a2 2 0 0 0 2-1.85L18 7.5"/><path d="M10 11v6.5M14 11v6.5"/></svg>';
       removeEl.addEventListener('click', ()=> removeFromInquiryList(p.id, it.variantId));
       bodyEl.appendChild(nameEl);
       bodyEl.appendChild(priceEl);
