@@ -156,7 +156,7 @@
 
   header.top{
     position:relative;
-    padding:44px 0 20px;
+    padding:32px 0 16px;
     overflow:hidden;
     background:linear-gradient(150deg, #b2122c 0%, #a50d1e 55%, #8a0a18 100%);
   }
@@ -164,27 +164,31 @@
     display:flex; align-items:flex-start; justify-content:space-between; gap:20px; position:relative; z-index:1;
     flex-wrap:nowrap;
   }
-  .brand-block{display:flex; align-items:flex-start; gap:16px; position:relative; z-index:1; min-width:0;}
+  .brand-block{display:flex; align-items:center; gap:16px; position:relative; z-index:1; min-width:0;}
   .brand-text{min-width:0;}
   .mark{
-    width:64px;height:64px;border-radius:20px;flex:none;
+    width:42px;height:76px;border-radius:20px;flex:none;
     background:transparent;
-    display:flex;align-items:center;justify-content:center;
+    display:flex;align-items:center;justify-content:flex-start;
     overflow:visible;
     box-shadow:none;
     cursor:default; user-select:none;
   }
-  .mark img{width:100%;height:100%;object-fit:contain;display:block;}
+  .mark img{width:100%;height:100%;object-fit:contain; object-position:left center; display:block;}
   .mark svg{width:32px;height:32px;}
   .brand-name{font-family:'Plus Jakarta Sans',sans-serif; font-size:28px;font-weight:800;letter-spacing:-.01em;line-height:1.05;margin:0; color:#fff;}
-  .brand-tag{margin:6px 0 0;color:rgba(255,255,255,.85);font-size:14px;letter-spacing:.01em;line-height:1.45;max-width:520px;}
+  .brand-tag{margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px;letter-spacing:.01em;line-height:1.45;max-width:520px;}
   .brand-tag b{color:var(--gold); font-weight:700;}
+  .tag-break{display:none;}
+  @media (max-width:640px){
+    .tag-break{display:inline;}
+  }
   .socials{display:flex;gap:10px; align-self:center; flex:none;}
   @media (max-width:520px){
-    .socials{flex-direction:column; align-items:center;}
+    .socials{flex-direction:row;}
   }
   .theme-btn{
-    width:40px;height:40px;border-radius:999px; flex:none;
+    width:40px;height:40px;border-radius:999px; flex:none; box-sizing:border-box;
     background:rgba(255,255,255,.22);
     backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
     border:1.5px solid rgba(255,255,255,.55);
@@ -1563,7 +1567,7 @@
      necesita su texto (flex-basis auto), no una cuarta parte fija: así
      "Cómo comprar" no se desborda sobre el de al lado. */
   .mobile-nav-row .wrap{
-    display:flex; gap:5px; padding:12px 12px;
+    display:flex; gap:5px; padding:8px 12px;
   }
   .mobile-nav-row .footer-link-btn{
     flex:1 1 auto; min-width:0; text-align:center; white-space:nowrap;
@@ -1896,6 +1900,7 @@
 
   @media (max-width:520px){
     .brand-name{font-size:23px;}
+    header.top{padding:24px 0 8px;}
     .filters-sticky{position:static;}
     .wa-fab{right:14px; bottom:14px; width:50px;height:50px;}
     .wa-fab svg{width:23px;height:23px;}
@@ -2126,7 +2131,8 @@
   .hero-search-go:active{transform:scale(.96);}
   .hero-search-go[hidden]{display:none;}
   @media (max-width:640px){
-    .hero-search{margin-top:14px; padding:13px 17px;}
+    .hero-search{margin-top:12px; padding:11px 16px;}
+    .brand-block{gap:10px;}
     /* la fuente se mantiene en 16px en móvil para no disparar el zoom de iOS */
   }
 
