@@ -217,7 +217,7 @@
       nameEl.textContent = variant ? (variant.name + ' — ' + p.name) : p.name;
       const priceEl = document.createElement('div');
       priceEl.className = 'inquiry-item-price';
-      priceEl.textContent = money(unitPrice);
+      priceEl.textContent = qty > 1 ? (money(unitPrice) + ' × ' + qty + '  =  ' + money(unitPrice * qty)) : money(unitPrice);
       const removeEl = document.createElement('button');
       removeEl.type = 'button';
       removeEl.className = 'inquiry-item-remove-btn';
@@ -258,6 +258,8 @@
 
     inquirySubtotalEl.textContent = money(subtotal);
     inquirySendBtn.href = buildInquiryWhatsAppLink(validItems);
+    const titleEl = document.getElementById('inquiryTitle');
+    if(titleEl) titleEl.textContent = 'Tu lista' + (validItems.length ? ' (' + validItems.length + ')' : '');
   }
 
   function attachSwipeRemove(row, id, variantId){
@@ -2141,7 +2143,7 @@
     const tema = document.documentElement.getAttribute('data-theme') || 'dark';
     const logos = siteContent.logos || {};
     const propio = tema === 'light' ? logos.claro : logos.oscuro;
-    const src = propio ? imgSrc(propio) : ('logo.png?v=20260721g');
+    const src = propio ? imgSrc(propio) : ('logo-mark.png?v=20260729');
     ['logoHeader','logoCompacto'].forEach(id=>{
       const img = document.getElementById(id);
       if(img) img.src = src;
@@ -4886,12 +4888,7 @@
     render();
   });
 
-  categoryChips.addEventListener('click', (e)=>{
-    const chip = e.target.closest('.chip-light');
-    if(!chip || !chip.dataset.category) return;
-    const cat = chip.dataset.category;
-    // Selección ÚNICA: solo una categoría activa a la vez.
-    // Si tocas la que ya está activa, se desactiva y vuelve a "Todas".
+  function aplicarCategoria(cat){
     if(cat === 'all' || activeCategories.has(cat)){
       activeCategories.clear();
     } else {
@@ -4903,8 +4900,26 @@
       if(cc === 'all') c.classList.toggle('active', activeCategories.size === 0);
       else c.classList.toggle('active', activeCategories.has(cc));
     });
+    const sel = document.getElementById('compactCatSelect');
+    if(sel) sel.value = activeCategories.size ? [...activeCategories][0] : 'all';
     render();
+  }
+
+  categoryChips.addEventListener('click', (e)=>{
+    const chip = e.target.closest('.chip-light');
+    if(!chip || !chip.dataset.category) return;
+    aplicarCategoria(chip.dataset.category);
   });
+
+  const compactCatSelect = document.getElementById('compactCatSelect');
+  if(compactCatSelect){
+    compactCatSelect.addEventListener('change', ()=>{
+      abrirCatalogoCompleto();
+      aplicarCategoria(compactCatSelect.value);
+      const target = document.getElementById('catalogoFullTitle');
+      if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  }
 
   // ---------- filtro de precio: desde / hasta ----------
   const precioMinInput = document.getElementById('precioMin');
