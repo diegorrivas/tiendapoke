@@ -252,9 +252,9 @@
   /* ---------- barra compacta (sticky al hacer scroll) ---------- */
   .compact-bar{
     position:fixed; top:0; left:0; right:0; z-index:80;
-    background:color-mix(in srgb, var(--bg) 97%, transparent);
+    background:linear-gradient(150deg, #b2122c 0%, #a50d1e 55%, #8a0a18 100%);
     backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
-    border-bottom:2px solid var(--red);
+    border-bottom:2px solid var(--red-deep);
     box-shadow:0 4px 20px rgba(0,0,0,.35);
     transform:translateY(-100%); transition:transform .28s ease;
   }
@@ -264,30 +264,30 @@
     display:flex; align-items:center; gap:10px; background:none; border:none; cursor:pointer; padding:0; flex:none;
   }
   .compact-brand img{
-    width:38px; height:38px; border-radius:11px; display:block;
-    background:var(--red); padding:5px; box-shadow:0 2px 8px rgba(241,13,13,.3);
+    width:34px; height:60px; display:block; object-fit:contain; background:transparent; padding:0; box-shadow:none;
   }
-  .compact-name{font-family:'Plus Jakarta Sans',sans-serif; color:var(--cream); font-weight:800; font-size:15px; white-space:nowrap;}
+  .compact-name{font-family:'Plus Jakarta Sans',sans-serif; color:#fff; font-weight:800; font-size:15px; white-space:nowrap;}
   .compact-search{
     flex:1; min-width:0; display:flex; align-items:center; gap:9px;
-    background:var(--surface-2); border:1.5px solid color-mix(in srgb, var(--cream) 16%, var(--line)); border-radius:999px; padding:11px 16px;
+    background:var(--surface); border:1.5px solid color-mix(in srgb, var(--cream) 16%, var(--line)); border-radius:999px; padding:11px 16px;
     box-shadow:0 2px 10px rgba(0,0,0,.22); transition:border-color .15s ease;
   }
   .compact-search:focus-within{border-color:var(--red);}
   .compact-search svg{width:17px; height:17px; color:var(--cream-dim); flex:none;}
   .compact-cat-select{
     flex:none; background:var(--surface-3); border:1px solid var(--line); border-radius:999px;
-    color:var(--cream); font-size:12.5px; font-weight:700; padding:7px 10px; cursor:pointer; max-width:110px;
+    color:var(--cream); font-size:12.5px; font-weight:700; padding:7px 10px; cursor:pointer; max-width:110px; outline:none;
   }
+  .compact-cat-select:focus{outline:2px solid var(--red); outline-offset:2px;}
   .compact-search input{
     flex:1; min-width:0; background:none; border:none; outline:none; color:var(--cream);
     font-size:16px; font-weight:500;
   }
   .compact-search input::placeholder{color:var(--cream-dim);}
   .compact-inner .sort-btn{
-    width:44px; height:44px; background:var(--surface-2);
-    border:1.5px solid color-mix(in srgb, var(--gold) 45%, var(--line));
-    color:var(--gold);
+    width:44px; height:44px; background:rgba(0,0,0,.2);
+    border:1.5px solid rgba(255,255,255,.35);
+    color:#fff;
   }
   .compact-inner .sort-btn.active{background:var(--gold); color:var(--ink); border-color:var(--gold);}
   @media (min-width:521px){
