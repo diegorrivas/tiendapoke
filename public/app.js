@@ -14,7 +14,16 @@
   let activeCategories = new Set();
   let precioMin = null;   // filtro de precio: desde
   let precioMax = null;   // filtro de precio: hasta
-  let showOnlyMix = false;
+  let showFavsOnly = false;
+  let favorites = new Set();
+  const FAVS_KEY = 'favorites';
+  try{
+    const rawFavs = localStorage.getItem(FAVS_KEY);
+    if(rawFavs) favorites = new Set(JSON.parse(rawFavs));
+  }catch(e){}
+  function saveFavorites(){
+    try{ localStorage.setItem(FAVS_KEY, JSON.stringify([...favorites])); }catch(e){}
+  }
   let inquiryList = [];
   const INQUIRY_KEY = 'inquiry-list';
   try{
@@ -52,32 +61,7 @@
   const loadMoreWrap = document.getElementById('loadMoreWrap');
   const loadMoreBtn = document.getElementById('loadMoreBtn');
 
-  function animateCount(el, target, suffix){
-    const from = Number(el.dataset.count) || 0;
-    el.dataset.count = target;
-    if(Math.abs(target - from) <= 1 || target > 500){ el.textContent = target + suffix; return; }
-    const dur = 320, t0 = performance.now();
-    function step(t){
-      const p = Math.min(1, (t - t0) / dur);
-      const val = Math.round(from + (target - from) * (1 - Math.pow(1 - p, 3)));
-      el.textContent = val + suffix;
-      if(p < 1) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
-  }
-
-  (function(){
-    const filtersEl = document.querySelector('.filters-sticky');
-    if(!filtersEl) return;
-    window.addEventListener('scroll', ()=>{
-      filtersEl.classList.toggle('is-stuck', filtersEl.getBoundingClientRect().top <= 0);
-    }, {passive:true});
-  })();
-
-  loadMoreBtn.addEventListener('click', ()=>{
-    loadMoreBtn.classList.add('loading');
-    setTimeout(renderNextPage, 150);
-  });
+  loadMoreBtn.addEventListener('click', renderNextPage);
 
   // Auto-cargar al acercarse al final (scroll infinito suave)
   window.addEventListener('scroll', ()=>{
@@ -85,10 +69,23 @@
     const rect = loadMoreWrap.getBoundingClientRect();
     if(rect.top < window.innerHeight + 300) renderNextPage();
   }, {passive:true});
-  const mixToggle = document.getElementById('mixToggle');
-  mixToggle.addEventListener('click', ()=>{
-    showOnlyMix = !showOnlyMix;
-    mixToggle.classList.toggle('active', showOnlyMix);
+  const favToggle = document.getElementById('favToggle');
+  const favCount = document.getElementById('favCount');
+
+  function updateFavToggle(){
+    const n = favorites.size;
+    favCount.textContent = n;
+    favCount.classList.toggle('show', n > 0);
+    favToggle.classList.toggle('active', showFavsOnly);
+  }
+
+  favToggle.addEventListener('click', ()=>{
+    if(favorites.size === 0 && !showFavsOnly){
+      showToast('Aún no tienes favoritos. Toca el corazón en un producto.');
+      return;
+    }
+    showFavsOnly = !showFavsOnly;
+    updateFavToggle();
     render();
   });
 
@@ -107,25 +104,23 @@
   const cartFabCount = document.getElementById('cartFabCount');
   function updateInquiryBadge(){
     const n = inquiryList.reduce((sum,it)=> sum + (it.qty||1), 0);
-    if(inquiryCount){ inquiryCount.textContent = n; inquiryCount.classList.toggle('show', n > 0); }
+    inquiryCount.textContent = n;
+    inquiryCount.classList.toggle('show', n > 0);
     if(cartFabCount) cartFabCount.textContent = n;
     if(cartFab) cartFab.classList.toggle('show', n > 0);
   }
   updateInquiryBadge();
   if(cartFab) cartFab.addEventListener('click', openInquiryModal);
 
-  function addToInquiryList(productId, qty, variant){
+  function addToInquiryList(productId, qty){
     qty = Math.max(1, Math.min(99, qty || 1));
-    const vId = variant ? variant.id : null;
-    const existing = inquiryList.find(it=> it.id === productId && (it.variantId||null) === vId);
+    const existing = inquiryList.find(it=> it.id === productId);
     if(existing){
       const p = products.find(x=>x.id===productId);
       if(p && p.allowQuantity) existing.qty = Math.min(99, (existing.qty||1) + qty);
       else{ showToast('Ese producto ya está en tu lista'); return; }
     } else {
-      inquiryList.push(variant
-        ? { id: productId, qty: qty, variantId: variant.id, variantName: variant.name, variantPrice: variant.price }
-        : { id: productId, qty: qty });
+      inquiryList.push({ id: productId, qty: qty });
     }
     saveInquiryListStorage();
     updateInquiryBadge();
@@ -133,34 +128,15 @@
     if(cartFab){ cartFab.classList.remove('cart-fab-bump'); void cartFab.offsetWidth; cartFab.classList.add('cart-fab-bump'); }
   }
 
-  function removeFromInquiryList(productId, variantId){
-    inquiryList = inquiryList.filter(it=> !(it.id === productId && (it.variantId||null) === (variantId||null)));
+  function removeFromInquiryList(productId){
+    inquiryList = inquiryList.filter(it=> it.id !== productId);
     saveInquiryListStorage();
     updateInquiryBadge();
     renderInquiryModal();
-    showToast('Quitado de tu lista');
-    actualizarBotonesAgregar(productId);
   }
 
-  const CART_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L22 8H6.2"/><circle cx="9.5" cy="20" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg>';
-  const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>';
-  // Refleja en TODAS las tarjetas visibles del mismo producto (puede repetirse en
-  // "Recién llegados" y en el catálogo) si está o no en el carrito, con animación.
-  function actualizarBotonesAgregar(productId){
-    const enCarrito = inquiryList.some(it=> it.id === productId);
-    document.querySelectorAll('.card[data-pid="' + productId + '"] .card-add-icon').forEach(btn=>{
-      btn.classList.remove('bump-add', 'bump-remove');
-      void btn.offsetWidth;
-      btn.classList.toggle('added', enCarrito);
-      btn.innerHTML = enCarrito ? CHECK_SVG : CART_SVG;
-      btn.title = enCarrito ? 'Quitar del carrito' : 'Agregar al carrito';
-      btn.setAttribute('aria-label', btn.title);
-      btn.classList.add(enCarrito ? 'bump-add' : 'bump-remove');
-    });
-  }
-
-  function updateInquiryQty(productId, newQty, variantId){
-    const item = inquiryList.find(it=> it.id === productId && (it.variantId||null) === (variantId||null));
+  function updateInquiryQty(productId, newQty){
+    const item = inquiryList.find(it=> it.id === productId);
     if(!item) return;
     item.qty = Math.max(1, Math.min(99, newQty));
     saveInquiryListStorage();
@@ -185,10 +161,8 @@
 
     let subtotal = 0;
     validItems.forEach(({it, p})=>{
-      const variant = it.variantId ? (p.variants||[]).find(v=>v.id===it.variantId) : null;
-      const qty = variant ? 1 : (it.qty || 1);
-      const unitPrice = variant ? variant.price : p.price;
-      subtotal += unitPrice * qty;
+      const qty = it.qty || 1;
+      subtotal += p.price * qty;
 
       const row = document.createElement('div');
       row.className = 'inquiry-item';
@@ -214,22 +188,20 @@
       bodyEl.className = 'inquiry-item-body';
       const nameEl = document.createElement('div');
       nameEl.className = 'inquiry-item-name';
-      nameEl.textContent = variant ? (variant.name + ' — ' + p.name) : p.name;
+      nameEl.textContent = p.name;
       const priceEl = document.createElement('div');
       priceEl.className = 'inquiry-item-price';
-      priceEl.textContent = qty > 1 ? (money(unitPrice) + ' × ' + qty + '  =  ' + money(unitPrice * qty)) : money(unitPrice);
+      priceEl.textContent = money(p.price);
       const removeEl = document.createElement('button');
       removeEl.type = 'button';
-      removeEl.className = 'inquiry-item-remove-btn';
-      removeEl.setAttribute('aria-label', 'Quitar');
-      removeEl.title = 'Quitar';
-      removeEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:block;"><path d="M9 3.5h6a1 1 0 0 1 1 1V5h3.25a.75.75 0 0 1 0 1.5H4.75a.75.75 0 0 1 0-1.5H8v-.5a1 1 0 0 1 1-1z"/><path d="M6 7.5l.9 12.15A2 2 0 0 0 8.9 21.5h6.2a2 2 0 0 0 2-1.85L18 7.5"/><path d="M10 11v6.5M14 11v6.5"/></svg>';
-      removeEl.addEventListener('click', ()=> removeFromInquiryList(p.id, it.variantId));
+      removeEl.className = 'inquiry-item-remove';
+      removeEl.textContent = 'Quitar';
+      removeEl.addEventListener('click', ()=> removeFromInquiryList(p.id));
       bodyEl.appendChild(nameEl);
       bodyEl.appendChild(priceEl);
       row.appendChild(bodyEl);
 
-      if(p.allowQuantity && !variant){
+      if(p.allowQuantity){
         const qtyEl = document.createElement('div');
         qtyEl.className = 'inquiry-qty';
         const minus = document.createElement('button');
@@ -250,19 +222,17 @@
         row.appendChild(fixedEl);
       }
 
-      row.appendChild(removeEl);
+      bodyEl.appendChild(removeEl);
       wrap.appendChild(row);
       inquiryItemsEl.appendChild(wrap);
-      attachSwipeRemove(row, p.id, it.variantId);
+      attachSwipeRemove(row, p.id);
     });
 
     inquirySubtotalEl.textContent = money(subtotal);
     inquirySendBtn.href = buildInquiryWhatsAppLink(validItems);
-    const titleEl = document.getElementById('inquiryTitle');
-    if(titleEl) titleEl.textContent = 'Tu lista' + (validItems.length ? ' (' + validItems.length + ')' : '');
   }
 
-  function attachSwipeRemove(row, id, variantId){
+  function attachSwipeRemove(row, id){
     let startX = 0, dx = 0, dragging = false;
     const THRESH = 80;
     function start(x){ dragging = true; dx = 0; startX = x; row.style.transition = 'none'; }
@@ -278,7 +248,7 @@
       if(Math.abs(dx) > THRESH){
         row.style.transform = 'translateX(-110%)';
         row.style.opacity = '0';
-        setTimeout(()=> removeFromInquiryList(id, variantId), 180);
+        setTimeout(()=> removeFromInquiryList(id), 180);
       } else {
         row.style.transform = '';
       }
@@ -293,12 +263,9 @@
     let msg = '¡Hola! Quisiera consultar por estos productos:\n\n';
     let subtotal = 0;
     validItems.forEach(({it, p}, i)=>{
-      const variant = it.variantId ? (p.variants||[]).find(v=>v.id===it.variantId) : null;
-      const qty = variant ? 1 : (it.qty || 1);
-      const unitPrice = variant ? variant.price : p.price;
-      const label = variant ? (variant.name + ' — ' + p.name) : p.name;
-      subtotal += unitPrice * qty;
-      msg += (i+1) + '. ' + label + (qty > 1 ? ' (x' + qty + ')' : '') + ' — ' + money(unitPrice) + '\n';
+      const qty = it.qty || 1;
+      subtotal += p.price * qty;
+      msg += (i+1) + '. ' + p.name + (qty > 1 ? ' (x' + qty + ')' : '') + ' — ' + money(p.price) + '\n';
       msg += '   ' + base + '#producto=' + encodeURIComponent(p.id) + '\n';
     });
     msg += '\nSubtotal referencial: ' + money(subtotal);
@@ -312,7 +279,7 @@
   function closeInquiryModal(){
     inquiryOverlay.classList.remove('show');
   }
-  if(inquiryListBtn) inquiryListBtn.addEventListener('click', openInquiryModal);
+  inquiryListBtn.addEventListener('click', openInquiryModal);
   inquiryClose.addEventListener('click', closeInquiryModal);
   inquiryOverlay.addEventListener('click', (e)=>{ if(e.target === inquiryOverlay) closeInquiryModal(); });
   const inquirySeguirBtn = document.getElementById('inquirySeguirBtn');
@@ -325,63 +292,12 @@
   const adminToggle = document.getElementById('adminToggle');
   const adminLabel = document.getElementById('adminLabel');
   const addBtn = document.getElementById('addBtn');
-  const lotBtn = document.getElementById('lotBtn');
   const searchInput = document.getElementById('heroSearchInput');
   const filterChips = document.getElementById('filterChips');
-  const chipThumb = document.getElementById('chipThumb');
-  function moveChipThumb(){
-    if(!chipThumb) return;
-    const active = filterChips.querySelector('.chip.active');
-    if(!active){ chipThumb.style.width = '0'; return; }
-    chipThumb.style.width = active.offsetWidth + 'px';
-    chipThumb.style.transform = 'translateX(' + active.offsetLeft + 'px)';
-  }
-  window.addEventListener('resize', moveChipThumb);
-  setTimeout(moveChipThumb, 0);
   const categoryChips = document.getElementById('categoryChips');
-  (function(){
-    const dotsWrap = document.getElementById('categoryScrollDots');
-    if(!dotsWrap || !categoryChips) return;
-    const dots = dotsWrap.querySelectorAll('span');
-    function update(){
-      const max = categoryChips.scrollWidth - categoryChips.clientWidth;
-      dotsWrap.classList.toggle('show', max > 8);
-      if(max <= 8) return;
-      const ratio = categoryChips.scrollLeft / max;
-      const idx = Math.min(dots.length - 1, Math.floor(ratio * dots.length));
-      dots.forEach((d,i)=> d.classList.toggle('active', i === idx));
-    }
-    categoryChips.addEventListener('scroll', update, {passive:true});
-    window.addEventListener('resize', update);
-    setTimeout(update, 300);
-
-    // Botones de deslizamiento a los lados: aparecen mientras se hace scroll, se ocultan al detenerse.
-    const catPrev = document.getElementById('catScrollPrev');
-    const catNext = document.getElementById('catScrollNext');
-    let hideNavTimer = null;
-    function updateNavArrows(){
-      if(!catPrev || !catNext) return;
-      const max = categoryChips.scrollWidth - categoryChips.clientWidth;
-      if(max <= 8){ catPrev.classList.remove('show'); catNext.classList.remove('show'); return; }
-      catPrev.classList.toggle('show', categoryChips.scrollLeft > 6);
-      catNext.classList.toggle('show', categoryChips.scrollLeft < max - 6);
-      clearTimeout(hideNavTimer);
-      hideNavTimer = setTimeout(()=>{ catPrev.classList.remove('show'); catNext.classList.remove('show'); }, 900);
-    }
-    categoryChips.addEventListener('scroll', updateNavArrows, {passive:true});
-    if(catPrev) catPrev.addEventListener('click', ()=> categoryChips.scrollBy({left:-160, behavior:'smooth'}));
-    if(catNext) catNext.addEventListener('click', ()=> categoryChips.scrollBy({left:160, behavior:'smooth'}));
-  })();  const themeToggle = document.getElementById('themeToggle');
+  const themeToggle = document.getElementById('themeToggle');
   const sortBtn = document.getElementById('sortBtn');
   const sortMenu = document.getElementById('sortMenu');
-  function moveSortThumb(menu){
-    if(!menu) return;
-    const thumb = menu.querySelector('.sort-thumb');
-    const active = menu.querySelector('.sort-option.active');
-    if(!thumb || !active) return;
-    thumb.style.height = active.offsetHeight + 'px';
-    thumb.style.transform = 'translateY(' + active.offsetTop + 'px)';
-  }
   const exportBtn = document.getElementById('exportBtn');
   const importBtn = document.getElementById('importBtn');
   const importFile = document.getElementById('importFile');
@@ -838,7 +754,6 @@
 
   const qvOverlay = document.getElementById('qvOverlay');
   const qvClose = document.getElementById('qvClose');
-  const qvMedia = document.getElementById('qvMedia');
   const qvTrack = document.getElementById('qvTrack');
   const qvPrev = document.getElementById('qvPrev');
   const qvNext = document.getElementById('qvNext');
@@ -846,7 +761,7 @@
   const qvBody = document.getElementById('qvBody');
   const qvFooter = document.getElementById('qvFooter');
 
-  waFab.href = 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent('¡Hola! Escribo desde el catálogo de La Tienda de Meowth.');
+  waFab.href = 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent('¡Hola! Escribo desde el catálogo de La Tienda de Miau.');
 
   function waLinkFor(p){
     const onSale = p.oldPrice && p.oldPrice > p.price;
@@ -873,9 +788,7 @@
 
   function updateLightbox(){
     lightboxImg.classList.remove('zoomed');
-    lightboxImg.classList.add('lb-entering');
     lightboxImg.src = imgSrc(lightboxImages[lightboxIndex]);
-    requestAnimationFrame(()=> requestAnimationFrame(()=> lightboxImg.classList.remove('lb-entering')));
     const multi = lightboxImages.length > 1;
     lightboxPrev.style.display = multi ? 'flex' : 'none';
     lightboxNext.style.display = multi ? 'flex' : 'none';
@@ -935,8 +848,6 @@
   })();
 
   function openQuickView(p){
-    updateSeoForProduct(p);
-    history.replaceState(null, '', location.pathname + '?producto=' + encodeURIComponent(p.id));
     const qvScrollEl = document.querySelector('.qv-scroll');
     if(qvScrollEl) qvScrollEl.scrollTop = 0;
     qvImages = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
@@ -971,13 +882,6 @@
     qvPrev.style.display = qvImages.length > 1 ? 'flex' : 'none';
     qvNext.style.display = qvImages.length > 1 ? 'flex' : 'none';
     qvDots.style.display = qvImages.length > 1 ? 'flex' : 'none';
-    if(qvImages.length > 1 && !localStorage.getItem('sawSwipeHint')){
-      const hint = document.createElement('div');
-      hint.className = 'qv-swipe-hint';
-      hint.textContent = 'Desliza para ver más fotos';
-      qvMedia.appendChild(hint);
-      setTimeout(()=>{ hint.remove(); localStorage.setItem('sawSwipeHint', '1'); }, 2200);
-    }
     const counterEl = document.getElementById('qvCounter');
     if(counterEl) counterEl.style.display = qvImages.length > 1 ? 'block' : 'none';
 
@@ -1048,85 +952,9 @@
       qvBody.appendChild(videoWrap);
     }
 
-    qvFooter.innerHTML = '';
-    const hasVariants = Array.isArray(p.variants) && p.variants.length;
-    const qvSelectedVariantIds = new Set();
-    let wantsFullLot = false;
-    let renderLotWrap = null;
-    if(hasVariants){
-      const firstAvail = p.variants.find(v=>!v.sold);
-      if(firstAvail) qvSelectedVariantIds.add(firstAvail.id);
-    }
-    function getSelectedVariants(){
-      return hasVariants ? p.variants.filter(v=> qvSelectedVariantIds.has(v.id)) : [];
-    }
-    if(hasVariants){
-      const varHint = document.createElement('div');
-      varHint.className = 'variant-select-hint';
-      varHint.textContent = 'Elige una o varias piezas:';
-      qvBody.appendChild(varHint);
-      const varList = document.createElement('div');
-      varList.className = 'variant-select-list';
-      function renderVarList(){
-        varList.innerHTML = '';
-        p.variants.forEach(v=>{
-          const checked = qvSelectedVariantIds.has(v.id);
-          const row = document.createElement('div');
-          row.className = 'variant-select-row' + (v.sold ? ' sold' : '') + (checked ? ' selected' : '');
-          row.innerHTML = '<div class="variant-select-check">' + (checked ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>' : '') + '</div>' +
-            '<div class="variant-select-info"><div class="variant-select-name">' + v.name + '</div>' +
-            (v.note ? '<div class="variant-select-note">' + v.note + '</div>' : '') + '</div>' +
-            '<div class="variant-select-price">' + money(v.price) + '</div>';
-          if(!v.sold) row.addEventListener('click', ()=>{
-            wantsFullLot = false;
-            if(qvSelectedVariantIds.has(v.id)) qvSelectedVariantIds.delete(v.id);
-            else qvSelectedVariantIds.add(v.id);
-            renderVarList(); if(renderLotWrap) renderLotWrap(); updateVariantFooter();
-          });
-          if(isAdmin){
-            const soldBtn = document.createElement('button');
-            soldBtn.type = 'button';
-            soldBtn.className = 'variant-sold-toggle' + (v.sold ? ' active' : '');
-            soldBtn.title = v.sold ? 'Marcar como disponible' : 'Marcar como vendida';
-            soldBtn.textContent = v.sold ? 'Vendida ✓' : 'Marcar vendida';
-            soldBtn.addEventListener('click', async (e)=>{
-              e.stopPropagation();
-              v.sold = !v.sold;
-              if(v.sold) qvSelectedVariantIds.delete(v.id);
-              renderVarList(); updateVariantFooter(); render(true);
-              try{ await window.fbSaveProduct(p); publicarCatalogo(); }catch(err){ showToast('No se pudo guardar.'); }
-            });
-            row.appendChild(soldBtn);
-          }
-          varList.appendChild(row);
-        });
-      }
-      renderVarList();
-      qvBody.appendChild(varList);
-      if(p.lotPrice){
-        const lotWrap = document.createElement('div');
-        lotWrap.className = 'qv-lot-price';
-        lotWrap.tabIndex = 0;
-        lotWrap.setAttribute('role', 'button');
-        renderLotWrap = function(){
-          lotWrap.classList.toggle('selected', wantsFullLot);
-          lotWrap.innerHTML = '<div class="qv-lot-check">' + (wantsFullLot ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>' : '') + '</div>' +
-            '<span><b>Llévate el lote completo por ' + money(p.lotPrice) + '</b> en vez de comprar cada pieza por separado.</span>';
-        }
-        renderLotWrap();
-        lotWrap.addEventListener('click', ()=>{
-          wantsFullLot = !wantsFullLot;
-          if(wantsFullLot) qvSelectedVariantIds.clear();
-          renderVarList(); renderLotWrap(); updateVariantFooter();
-        });
-        qvBody.appendChild(lotWrap);
-      }
-    }
-
     // Productos relacionados: "Completa tu colección".
     // Primero los que el dueño eligió a mano; el resto se completa solo,
     // priorizando coincidencias de palabras del título y luego la misma categoría.
-    // Se muestra DESPUÉS de la lista de figuras/variantes en productos "mix".
     const related = (function(){
       const TOPE = 10;
       const disponibles = products.filter(x => x.id !== p.id && x.status !== 'vendido');
@@ -1152,7 +980,6 @@
       const automaticos = disponibles
         .filter(x => !yaEsta.has(x.id))
         .map(x => ({ x, s: puntaje(x) }))
-        .filter(o => o.s > 0)
         .sort((a, b) => b.s - a.s)
         .map(o => o.x);
 
@@ -1196,32 +1023,10 @@
       relWrap.appendChild(relRow);
       qvBody.appendChild(relWrap);
     }
+
+    qvFooter.innerHTML = '';
     const priceWrap = document.createElement('div');
     priceWrap.className = 'qv-price';
-    function updateVariantFooter(){
-      if(!hasVariants) return;
-      const sel = getSelectedVariants();
-      if(wantsFullLot){
-        nowS.textContent = money(p.lotPrice) + ' · lote completo';
-        wa.href = 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(
-          '¡Hola! Quiero el lote completo "' + p.name + '" por ' + money(p.lotPrice) + '. ¿Sigue disponible?');
-      } else if(!sel.length){
-        const priceSource = p.variants.filter(v=>!v.sold).length ? p.variants.filter(v=>!v.sold) : p.variants;
-        nowS.textContent = 'Desde ' + money(Math.min(...priceSource.map(v=>v.price)));
-        wa.href = 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(
-          '¡Hola! Me interesa el lote "' + p.name + '". ¿Qué piezas tienes disponibles?');
-      } else if(sel.length === 1){
-        nowS.textContent = money(sel[0].price);
-        wa.href = 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(
-          '¡Hola! Me interesa "' + sel[0].name + '" del lote "' + p.name + '" (' + money(sel[0].price) + '). ¿Sigue disponible?');
-      } else {
-        const total = sel.reduce((s,v)=> s + v.price, 0);
-        nowS.textContent = money(total) + ' · ' + sel.length + ' piezas';
-        const lista = sel.map(v=> v.name + ' (' + money(v.price) + ')').join(', ');
-        wa.href = 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(
-          '¡Hola! Me interesan estas piezas del lote "' + p.name + '": ' + lista + '. ¿Siguen disponibles?');
-      }
-    }
     const hasDiscount = p.oldPrice && p.oldPrice > p.price;
     if(hasDiscount){
       const oldS = document.createElement('span');
@@ -1242,7 +1047,7 @@
     const actions = document.createElement('div');
     actions.className = 'qv-cta-row';
 
-    if(!isSold && !hasVariants){
+    if(!isSold){
       let qvQty = 1;
       if(p.allowQuantity){
         const qtyStepper = document.createElement('div');
@@ -1262,27 +1067,7 @@
       cartBtn.type = 'button';
       cartBtn.className = 'qv-cta-cart';
       cartBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L22 8H6.2"/><circle cx="9.5" cy="20" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg><span>Agregar</span>';
-      cartBtn.addEventListener('click', ()=>{
-        addToInquiryList(p.id, qvQty);
-        cartBtn.classList.remove('cart-btn-bump'); void cartBtn.offsetWidth; cartBtn.classList.add('cart-btn-bump');
-      });
-      actions.appendChild(cartBtn);
-    } else if(!isSold && hasVariants){
-      const cartBtn = document.createElement('button');
-      cartBtn.type = 'button';
-      cartBtn.className = 'qv-cta-cart';
-      cartBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L22 8H6.2"/><circle cx="9.5" cy="20" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg><span>Agregar</span>';
-      cartBtn.addEventListener('click', ()=>{
-        if(wantsFullLot){
-          addToInquiryList(p.id, 1, { id: 'lote-completo', name: 'Lote completo', price: p.lotPrice });
-          cartBtn.classList.remove('cart-btn-bump'); void cartBtn.offsetWidth; cartBtn.classList.add('cart-btn-bump');
-          return;
-        }
-        const sel = getSelectedVariants();
-        if(!sel.length){ showToast('Selecciona al menos una pieza'); return; }
-        sel.forEach(v=> addToInquiryList(p.id, 1, { id: v.id, name: v.name, price: v.price }));
-        cartBtn.classList.remove('cart-btn-bump'); void cartBtn.offsetWidth; cartBtn.classList.add('cart-btn-bump');
-      });
+      cartBtn.addEventListener('click', ()=> addToInquiryList(p.id, qvQty));
       actions.appendChild(cartBtn);
     }
 
@@ -1293,7 +1078,6 @@
     wa.title = isSold ? '¿Lo consigues de nuevo?' : 'Escribir por WhatsApp';
     wa.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L4 20l1.2-4.2A8.5 8.5 0 1 1 21 11.5Z"/><path d="M8.5 10.3c.2 2.2 2 4 4.2 4.2" stroke-linecap="round"/></svg><span>WhatsApp</span>';
     actions.appendChild(wa);
-    updateVariantFooter();
 
     const shareBtn = document.createElement('button');
     shareBtn.type = 'button';
@@ -1334,7 +1118,7 @@
   }
 
   function copyProductLink(p){
-    const url = location.pathname + '?producto=' + encodeURIComponent(p.id);
+    const url = location.href.split('#')[0] + '#producto=' + encodeURIComponent(p.id);
     const txt = p.name + ' — ' + money(p.price) + '\n' + url;
     const aviso = ()=> showToast('Link copiado ✓ pégalo en tu mensaje');
     if(navigator.clipboard && navigator.clipboard.writeText){
@@ -1348,8 +1132,8 @@
     const priceTxt = (p.oldPrice && p.oldPrice > p.price)
       ? `${money(p.price)} (antes ${money(p.oldPrice)})`
       : money(p.price);
-    const url = location.pathname + '?producto=' + encodeURIComponent(p.id);
-    const text = `${p.name} — ${priceTxt}\nMíralo en el catálogo de La Tienda de Meowth 🐱`;
+    const url = location.href.split('#')[0] + '#producto=' + encodeURIComponent(p.id);
+    const text = `${p.name} — ${priceTxt}\nMíralo en el catálogo de La Tienda de Miau 🐱`;
     const full = text + '\n' + url;
 
     if(navigator.share){
@@ -1368,65 +1152,9 @@
     else showToast('No se pudo compartir en este navegador');
   }
 
-  const DEFAULT_META = {
-    title: 'La Tienda de Meowth · Catálogo de Pokémon Center Japón en Perú',
-    desc: 'Primera tienda especializada en Pokémon del Perú desde 2007. Figuras, peluches y TCG 100% originales, importados de Japón.',
-    ogTitle: 'La Tienda de Meowth · Catálogo',
-    ogDesc: 'La primera tienda especializada en Pokémon del Perú desde 2007, de coleccionista para coleccionistas.',
-    image: 'https://tiendapoke.com/logo.png',
-    url: 'https://tiendapoke.com/'
-  };
-  function setMetaAttr(id, attr, value){
-    const el = document.getElementById(id);
-    if(el) el.setAttribute(attr, value);
-  }
-  function updateSeoForProduct(p){
-    const ld = document.getElementById('productJsonLd');
-    if(!p){
-      document.title = DEFAULT_META.title;
-      setMetaAttr('metaDesc','content',DEFAULT_META.desc);
-      setMetaAttr('metaCanonical','href',DEFAULT_META.url);
-      setMetaAttr('metaOgUrl','content',DEFAULT_META.url);
-      setMetaAttr('metaOgType','content','website');
-      setMetaAttr('metaOgTitle','content',DEFAULT_META.ogTitle);
-      setMetaAttr('metaOgDesc','content',DEFAULT_META.ogDesc);
-      setMetaAttr('metaOgImage','content',DEFAULT_META.image);
-      setMetaAttr('metaTwTitle','content',DEFAULT_META.ogTitle);
-      setMetaAttr('metaTwDesc','content',DEFAULT_META.ogDesc);
-      if(ld) ld.textContent = '';
-      return;
-    }
-    const title = p.name + ' · La Tienda de Meowth';
-    const desc = (p.desc || ('Disponible en La Tienda de Meowth: ' + p.name + '.')).slice(0,160);
-    const url = 'https://tiendapoke.com/?producto=' + encodeURIComponent(p.id);
-    const img = (p.images && p.images.length) ? imgSrc(p.images[0]) : DEFAULT_META.image;
-    document.title = title;
-    setMetaAttr('metaDesc','content',desc);
-    setMetaAttr('metaCanonical','href',url);
-    setMetaAttr('metaOgUrl','content',url);
-    setMetaAttr('metaOgType','content','product');
-    setMetaAttr('metaOgTitle','content',title);
-    setMetaAttr('metaOgDesc','content',desc);
-    setMetaAttr('metaOgImage','content',img);
-    setMetaAttr('metaTwTitle','content',title);
-    setMetaAttr('metaTwDesc','content',desc);
-    if(ld){
-      ld.textContent = JSON.stringify({
-        '@context':'https://schema.org', '@type':'Product',
-        name: p.name, description: desc, image: img, url,
-        offers: {
-          '@type':'Offer', priceCurrency:'PEN', price: p.price,
-          availability: p.status === 'vendido' ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock'
-        }
-      });
-    }
-  }
-
   function closeQuickView(){
     qvOverlay.classList.remove('show');
     document.body.style.overflow = '';
-    updateSeoForProduct(null);
-    history.replaceState(null, '', location.pathname);
   }
   qvClose.addEventListener('click', closeQuickView);
 
@@ -1503,41 +1231,12 @@
   }
 
   const CACHE_KEY = 'catalogo-cache-v1';
-  const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min: evita repetir la lectura del catálogo publicado en cada visita
 
-  function renderGridSkeletons(){
-    if(!grid) return;
-    grid.innerHTML = '';
-    for(let i=0;i<8;i++){
-      const sk = document.createElement('div');
-      sk.className = 'card card-skeleton';
-      sk.innerHTML = '<div class="card-skeleton-img"></div><div class="card-skeleton-line" style="width:75%"></div><div class="card-skeleton-line" style="width:40%"></div>';
-      grid.appendChild(sk);
-    }
-  }
-
-  async function loadProducts(retriesLeft){
-    if(retriesLeft === undefined) retriesLeft = 2;
+  async function loadProducts(){
     // --- 1) Camino rápido para el cliente: catálogo publicado ---
-    // Son 3 o 4 lecturas en vez de una por producto. Si el caché local es
-    // reciente (menos de CACHE_TTL_MS), ni siquiera se consulta Firebase:
-    // se usa la copia guardada tal cual, ahorrando esas lecturas.
+    // Son 3 o 4 lecturas en vez de una por producto. Además, si la versión no
+    // cambió desde la última visita, se usa la copia guardada en el navegador.
     if(!isAdmin){
-      let mostroCache = false;
-      try{
-        const guardadoPrevio = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-        if(guardadoPrevio && guardadoPrevio.productos && guardadoPrevio.productos.length){
-          // Muestra la caché al instante aunque esté vencida (evita la pantalla vacía);
-          // si está vencida seguimos abajo a refrescarla en silencio contra Firebase.
-          products = guardadoPrevio.productos;
-          if(loadingState) loadingState.style.display = 'none';
-          render();
-          abrirProductoCompartido();
-          mostroCache = true;
-          if(guardadoPrevio.cachedAt && (Date.now() - guardadoPrevio.cachedAt < CACHE_TTL_MS)) return;
-        }
-      }catch(e){ /* caché corrupto o inaccesible: seguimos por el camino normal */ }
-      if(!mostroCache) renderGridSkeletons();
       try{
         const publicado = await window.fbLoadCatalog();
         if(publicado && publicado.productos.length){
@@ -1545,7 +1244,7 @@
           try{
             const guardado = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
             if(guardado && guardado.version === publicado.version) lista = guardado.productos;
-            localStorage.setItem(CACHE_KEY, JSON.stringify({ ...publicado, productos: lista, cachedAt: Date.now() }));
+            else localStorage.setItem(CACHE_KEY, JSON.stringify(publicado));
           }catch(e){ /* sin espacio o modo privado: seguimos sin caché */ }
 
           products = lista;
@@ -1554,22 +1253,11 @@
           abrirProductoCompartido();
           return;
         }
-      }catch(e){
-        // Arranque en frío: justo tras "firebase-ready" a veces la primera
-        // lectura falla. Reintenta en silencio antes de caer al camino lento.
-        if(retriesLeft > 0){
-          await new Promise(r=> setTimeout(r, 900));
-          return loadProducts(retriesLeft - 1);
-        }
-      }
+      }catch(e){ /* si falla, seguimos por el camino normal */ }
     }
 
     // --- 2) Camino completo: producto por producto (admin o primera vez) ---
     let fromNewCollection = await window.fbLoadAllProducts();
-    if(fromNewCollection === null && retriesLeft > 0){
-      await new Promise(r=> setTimeout(r, 900));
-      return loadProducts(retriesLeft - 1);
-    }
 
     if(fromNewCollection === null){
       // Fallo real de conexión: probamos con el formato viejo como último recurso,
@@ -1628,13 +1316,12 @@
 
   // Si alguien abrió un link compartido de un producto, se lo mostramos directo.
   function abrirProductoCompartido(){
-    const q = new URLSearchParams(location.search).get('producto');
     const hashMatch = location.hash.match(/^#producto=(.+)$/);
-    const sharedId = q ? decodeURIComponent(q) : (hashMatch ? decodeURIComponent(hashMatch[1]) : null);
-    if(!sharedId) return;
+    if(!hashMatch) return;
+    const sharedId = decodeURIComponent(hashMatch[1]);
     const sharedProduct = products.find(p=> p.id === sharedId);
     if(sharedProduct) openQuickView(sharedProduct);
-    else history.replaceState(null, '', location.pathname);
+    history.replaceState(null, '', location.pathname + location.search);
   }
 
   // Al entrar al panel se leen los productos desde su fuente real (uno por uno)
@@ -1702,7 +1389,7 @@
     quienes: {
       foto: null,
       parrafos: [
-        'La Tienda de Meowth nació en 2007 como la primera tienda especializada en Pokémon del Perú, de un coleccionista para otros coleccionistas: cada figura, peluche y carta que ves aquí fue escogida y revisada personalmente antes de llegar a ti. Todo 100% original, importado de Japón y del resto del mundo.',
+        'La Tienda de Miau nació en 2007 como la primera tienda especializada en Pokémon del Perú, de un coleccionista para otros coleccionistas: cada figura, peluche y carta que ves aquí fue escogida y revisada personalmente antes de llegar a ti. Todo 100% original, importado de Japón y del resto del mundo.',
         'Compartimos esta emoción: elegir algo, esperar a que llegue y por fin tenerlo. Sé que no es solo "una figura nueva": es el resultado de tu esfuerzo. Es tu felicidad, y la cuido como si fuera la mía.',
         'Por eso mi meta es simple: que estés contento en cada compra. Más de 18 años lo respaldan, y siempre estaré agradecido por la confianza que me das.'
       ],
@@ -1726,7 +1413,7 @@
     sounds: { quienes: null, comprar: null },
     resenas: [],
     seo: {
-      titulo: 'La Tienda de Meowth · Catálogo de Pokémon Center Japón en Perú',
+      titulo: 'La Tienda de Miau · Catálogo de Pokémon Center Japón en Perú',
       descripcion: 'Primera tienda especializada en Pokémon del Perú desde 2007. Figuras, peluches y TCG 100% originales, importados de Japón.'
     },
     titles: {
@@ -1742,24 +1429,15 @@
     mosaicos: {
       novedades: { activo: true,  modo: 'auto', banner: null, eyebrow: 'Recién llegados',      titulo: 'Novedades' },
       ofertas:   { activo: true,  modo: 'auto', banner: null, eyebrow: 'Por tiempo limitado',  titulo: 'Ofertas' },
-      preventas: { activo: true,  modo: 'auto', banner: null, eyebrow: 'Asegura el tuyo',       titulo: 'Preventas' },
-      mix:       { activo: true,  modo: 'auto', banner: null, eyebrow: 'Completa tu cole',      titulo: 'Sueltos' }
+      preventas: { activo: true,  modo: 'auto', banner: null, eyebrow: 'Asegura el tuyo',       titulo: 'Preventas' }
     },
-    mosaicoOrden: ['novedades','ofertas','preventas','mix'],
     /* Fotos del viaje a Japón en "Quiénes somos". Cada una: { url, pie }. */
     japon: [],
     /* Textos del pie de página. */
     footer: {
-      titulo: '¡Únete a la comunidad!',
-      subtitulo: 'Síguenos para nuevos ingresos, preventas, ofertas y más.'
+      titulo: 'Entérate de todo primero',
+      subtitulo: 'Síguenos para nuevos ingresos, preventas y ofertas — actualizaciones diarias.'
     },
-    /* Cinta deslizante de confianza, arriba del header. */
-    ticker: [
-      'Envíos a todo el Perú',
-      'Productos 100% originales',
-      'Reserva pagando una parte',
-      'Asesoría personalizada'
-    ],
     /* Logos por modo. null = usar /logo.png por defecto. */
     logos: { claro: null, oscuro: null },
     /* Íconos del botón día/noche. null = usar el sol/luna por defecto. */
@@ -1770,30 +1448,15 @@
   }
   let siteContent = cloneDefaultContent();
 
-  const SITE_CONTENT_CACHE_KEY = 'site-content-cache-v1';
-  async function loadSiteContent(retriesLeft){
-    if(retriesLeft === undefined) retriesLeft = 2;
-    try{
-      const guardado = JSON.parse(localStorage.getItem(SITE_CONTENT_CACHE_KEY) || 'null');
-      if(!isAdmin && guardado && guardado.cachedAt && (Date.now() - guardado.cachedAt < CACHE_TTL_MS)){
-        siteContent = Object.assign(cloneDefaultContent(), guardado.value);
-        renderSiteContent();
-        return;
-      }
-    }catch(e){ /* seguimos por el camino normal */ }
+  async function loadSiteContent(){
     try{
       const res = await window.storage.get(CONTENT_KEY, true);
       if(res && res.value){
         const loaded = JSON.parse(res.value);
         // combina con los valores por defecto por si falta algún campo nuevo
         siteContent = Object.assign(cloneDefaultContent(), loaded);
-        try{ localStorage.setItem(SITE_CONTENT_CACHE_KEY, JSON.stringify({ value: loaded, cachedAt: Date.now() })); }catch(e){}
       }
     }catch(e){
-      if(retriesLeft > 0){
-        await new Promise(r=> setTimeout(r, 900));
-        return loadSiteContent(retriesLeft - 1);
-      }
       siteContent = cloneDefaultContent();
     }
     renderSiteContent();
@@ -1848,38 +1511,6 @@
   conectarMosFile('novedades', 'mosNovFile', 'mosNovClear');
   conectarMosFile('ofertas',   'mosOfeFile', 'mosOfeClear');
   conectarMosFile('preventas', 'mosPreFile', 'mosPreClear');
-  conectarMosFile('mix', 'mosMixFile', 'mosMixClear');
-
-  const MOS_LABELS = { novedades:'Novedades', ofertas:'Ofertas', preventas:'Preventas', mix:'Mix sueltos' };
-  let mosOrdenPend = ['novedades','ofertas','preventas','mix'];
-  function renderMosOrdenList(){
-    const list = document.getElementById('mosOrdenList');
-    if(!list) return;
-    list.innerHTML = '';
-    mosOrdenPend.forEach((clave, i)=>{
-      const row = document.createElement('div');
-      row.className = 'mos-orden-row';
-      const label = document.createElement('span');
-      label.textContent = (i+1) + '. ' + MOS_LABELS[clave];
-      const btns = document.createElement('div');
-      btns.className = 'mos-orden-btns';
-      const up = document.createElement('button');
-      up.type = 'button'; up.innerHTML = '↑'; up.disabled = i === 0;
-      up.addEventListener('click', ()=>{
-        [mosOrdenPend[i-1], mosOrdenPend[i]] = [mosOrdenPend[i], mosOrdenPend[i-1]];
-        renderMosOrdenList();
-      });
-      const down = document.createElement('button');
-      down.type = 'button'; down.innerHTML = '↓'; down.disabled = i === mosOrdenPend.length - 1;
-      down.addEventListener('click', ()=>{
-        [mosOrdenPend[i+1], mosOrdenPend[i]] = [mosOrdenPend[i], mosOrdenPend[i+1]];
-        renderMosOrdenList();
-      });
-      btns.appendChild(up); btns.appendChild(down);
-      row.appendChild(label); row.appendChild(btns);
-      list.appendChild(row);
-    });
-  }
 
 
   // ---- editor de fotos de Japón (Quiénes somos) ----
@@ -2143,7 +1774,7 @@
     const tema = document.documentElement.getAttribute('data-theme') || 'dark';
     const logos = siteContent.logos || {};
     const propio = tema === 'light' ? logos.claro : logos.oscuro;
-    const src = propio ? imgSrc(propio) : ('logo-mark.png?v=20260729');
+    const src = propio ? imgSrc(propio) : ('logo.png?v=20260721g');
     ['logoHeader','logoCompacto'].forEach(id=>{
       const img = document.getElementById(id);
       if(img) img.src = src;
@@ -2166,11 +1797,10 @@
   function renderJaponTira(){
     const tira = document.getElementById('japonTira');
     if(!tira) return;
-    const wrap = tira.closest('.japon-tira-wrap');
     const fotos = Array.isArray(siteContent.japon) ? siteContent.japon : [];
     tira.innerHTML = '';
-    if(!fotos.length){ if(wrap) wrap.hidden = true; else tira.hidden = true; return; }
-    if(wrap) wrap.hidden = false; else tira.hidden = false;
+    if(!fotos.length){ tira.hidden = true; return; }
+    tira.hidden = false;
     fotos.forEach(f=>{
       const url = (f && (f.url || f.src)) || '';
       if(!url) return;
@@ -2187,33 +1817,12 @@
       }
       tira.appendChild(item);
     });
-    setupJaponTiraNav(tira, fotos.length);
-  }
-
-  function setupJaponTiraNav(tira, count){
-    const wrap = tira.closest('.japon-tira-wrap');
-    if(!wrap) return;
-    const prevBtn = wrap.querySelector('.tira-nav.prev');
-    const nextBtn = wrap.querySelector('.tira-nav.next');
-    const fill = wrap.querySelector('.tira-progress .fill');
-    function update(){
-      const max = tira.scrollWidth - tira.clientWidth;
-      const ratio = max > 0 ? tira.scrollLeft / max : 0;
-      if(fill) fill.style.width = Math.max(8, ratio * 100) + '%';
-      if(prevBtn) prevBtn.style.display = tira.scrollLeft > 4 ? 'flex' : 'none';
-      if(nextBtn) nextBtn.style.display = (max > 4 && tira.scrollLeft < max - 4) ? 'flex' : 'none';
-    }
-    tira.addEventListener('scroll', update, {passive:true});
-    if(prevBtn) prevBtn.onclick = ()=> tira.scrollBy({left:-320, behavior:'smooth'});
-    if(nextBtn) nextBtn.onclick = ()=> tira.scrollBy({left:320, behavior:'smooth'});
-    setTimeout(update, 50);
   }
 
   function renderSiteContent(){
     aplicarLogo();
     aplicarIconosTema();
     aplicarFooter();
-    aplicarTicker();
     const quienesPanel = document.getElementById('quienesSectionBody');
     if(quienesPanel){
       quienesPanel.innerHTML = '';
@@ -2225,7 +1834,7 @@
         fotoWrap.className = 'quienes-foto';
         const img = document.createElement('img');
         img.src = imgSrc(fotoUrl);
-        img.alt = 'Foto de La Tienda de Meowth';
+        img.alt = 'Foto de La Tienda de Miau';
         fotoWrap.appendChild(img);
         layout.appendChild(fotoWrap);
       }
@@ -2240,26 +1849,11 @@
       layout.appendChild(textCol);
       quienesPanel.appendChild(layout);
 
-      const tiraWrap = document.createElement('div');
-      tiraWrap.className = 'japon-tira-wrap';
-      tiraWrap.hidden = true;
       const tira = document.createElement('div');
       tira.className = 'japon-tira';
       tira.id = 'japonTira';
-      const prevBtn = document.createElement('button');
-      prevBtn.type = 'button'; prevBtn.className = 'tira-nav prev'; prevBtn.setAttribute('aria-label','Anterior');
-      prevBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg>';
-      const nextBtn = document.createElement('button');
-      nextBtn.type = 'button'; nextBtn.className = 'tira-nav next'; nextBtn.setAttribute('aria-label','Siguiente');
-      nextBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>';
-      const progress = document.createElement('div');
-      progress.className = 'tira-progress';
-      progress.innerHTML = '<div class="fill"></div>';
-      tiraWrap.appendChild(prevBtn);
-      tiraWrap.appendChild(nextBtn);
-      tiraWrap.appendChild(tira);
-      tiraWrap.appendChild(progress);
-      quienesPanel.appendChild(tiraWrap);
+      tira.hidden = true;
+      quienesPanel.appendChild(tira);
 
       const statsWrap = document.createElement('div');
       statsWrap.className = 'info-stats';
@@ -2308,21 +1902,16 @@
       // Métodos de pago que se muestran como chips dentro del Paso 2.
       // Si algún día cambia el recargo o quieres agregar/quitar un método, edita esta lista.
       const metodosPago = [
-        { nombre: 'Yape / Plin', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.4"/><path d="M6.5 6.5h11M6.5 17.5h11"/><path d="M9.5 12 11.2 13.7 14.7 10.2"/></svg>' },
-        { nombre: 'Transferencia', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6"/><path d="M4.5 10v8M9 10v8M15 10v8M19.5 10v8"/><path d="M3 19.5h18"/><path d="M3 10h18"/></svg>' },
-        { nombre: 'Tarjeta de crédito', nota: '+5%', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.6" y="5.6" width="18.8" height="12.8" rx="2"/><path d="M2.6 9.4h18.8"/><path d="M6 14.4h4"/></svg>' }
+        { nombre: 'Yape' },
+        { nombre: 'Plin' },
+        { nombre: 'Transferencia' },
+        { nombre: 'Tarjeta', nota: '+5%' }
       ];
-      // Opciones de recepción del pedido, mostradas como chips en el Paso 3.
-      const opcionesEnvio = [
-        { nombre: 'Envíos a todo el Perú', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-9Z"/></svg>' },
-        { nombre: 'Recojo presencial', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.2 7 8l3.2 2 1.8-1.6 1.8 1.6L21 8"/><path d="M6.8 9.6l3.6 4.2a1.5 1.5 0 0 0 2.3-1.9l-3-3.5"/><path d="M13.3 7.7l2.3 2.7a1.5 1.5 0 0 1-2.1 2.1"/></svg>' },
-        { nombre: 'Delivery', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="2.6"/><circle cx="18.3" cy="17.5" r="2.6"/><path d="M8.1 17.5h6.9M5.5 17.5 8 12h4l2 3h3.3"/><path d="M10.8 12l2-3h3.2"/></svg>' }
-      ];
-      // Íconos por paso: Pokédex (elegir) / viñeta de chat (coordinar) / carita feliz (recibir).
+      // Íconos por paso: buscar / escribir / recibir.
       const stepIcons = [
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5H6A3.5 3.5 0 0 0 2.5 6v12A3.5 3.5 0 0 0 6 21.5h2"/><path d="M8 2.5h10A3.5 3.5 0 0 1 21.5 6v12a3.5 3.5 0 0 1-3.5 3.5H8"/><path d="M8 2.5v19"/><circle cx="5.2" cy="9.2" r="2.6"/><circle cx="5.2" cy="14.2" r="1"/><circle cx="5.2" cy="17.6" r="1"/><rect x="11.5" y="6" width="7" height="5" rx="1"/></svg>',
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>',
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.2"/><path d="M7.6 13.6c1 2 2.6 3 4.4 3s3.4-1 4.4-3"/><circle cx="8.6" cy="9.6" r="1.15" fill="currentColor" stroke="none"/><circle cx="15.4" cy="9.6" r="1.15" fill="currentColor" stroke="none"/></svg>'
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4h13v11H1z"/><path d="M14 8h4l3 3v4h-7z"/><circle cx="5.5" cy="17.5" r="1.5"/><circle cx="17.5" cy="17.5" r="1.5"/></svg>'
       ];
       siteContent.comprar.pasos.forEach((paso, i)=>{
         const card = document.createElement('div');
@@ -2338,28 +1927,6 @@
         const p = document.createElement('p');
         p.textContent = paso.desc;
         card.appendChild(head); card.appendChild(p);
-        // El Paso 1 muestra los botones "Ver catálogo" / "Escríbeme" dentro de la tarjeta, centrados.
-        if(i === 0){
-          const comprarCta = document.createElement('div');
-          comprarCta.className = 'comprar-cta-row';
-          const verCatalogoBtn = document.createElement('button');
-          verCatalogoBtn.type = 'button';
-          verCatalogoBtn.className = 'btn-primary comprar-cta-catalogo';
-          verCatalogoBtn.textContent = 'Ver catálogo';
-          verCatalogoBtn.addEventListener('click', ()=>{
-            abrirCatalogoCompleto();
-            render();
-            scrollToCatalog();
-          });
-          const waCtaLink = document.createElement('a');
-          waCtaLink.className = 'comprar-cta-wa';
-          waCtaLink.href = waFab.href;
-          waCtaLink.target = '_blank'; waCtaLink.rel = 'noopener';
-          waCtaLink.innerHTML = waCtaIconSvg + '<span>Escríbeme</span>';
-          comprarCta.appendChild(verCatalogoBtn);
-          comprarCta.appendChild(waCtaLink);
-          card.appendChild(comprarCta);
-        }
         // El Paso 2 muestra además los métodos de pago como chips.
         if(i === 1){
           const payBlock = document.createElement('div');
@@ -2372,15 +1939,12 @@
           metodosPago.forEach(m=>{
             const chip = document.createElement('span');
             chip.className = 'pay-chip';
-            chip.innerHTML = m.icon || '';
-            const txt = document.createElement('span');
-            txt.textContent = m.nombre;
-            chip.appendChild(txt);
+            chip.textContent = m.nombre;
             if(m.nota){
-              const nota = document.createElement('span');
-              nota.className = 'pay-note';
-              nota.textContent = m.nota;
-              chip.appendChild(nota);
+              chip.appendChild(document.createTextNode(' '));
+              const em = document.createElement('em');
+              em.textContent = m.nota;
+              chip.appendChild(em);
             }
             payRow.appendChild(chip);
           });
@@ -2388,31 +1952,29 @@
           payBlock.appendChild(payRow);
           card.appendChild(payBlock);
         }
-        // El Paso 3 muestra las formas de recibir el pedido como chips.
-        if(i === 2){
-          const shipBlock = document.createElement('div');
-          shipBlock.className = 'ship-block';
-          const shipLabel = document.createElement('span');
-          shipLabel.className = 'ship-label';
-          shipLabel.textContent = 'Cómo lo recibes';
-          const shipRow = document.createElement('div');
-          shipRow.className = 'ship-row';
-          opcionesEnvio.forEach(o=>{
-            const chip = document.createElement('span');
-            chip.className = 'ship-chip';
-            chip.innerHTML = o.icon || '';
-            const txt = document.createElement('span');
-            txt.textContent = o.nombre;
-            chip.appendChild(txt);
-            shipRow.appendChild(chip);
-          });
-          shipBlock.appendChild(shipLabel);
-          shipBlock.appendChild(shipRow);
-          card.appendChild(shipBlock);
-        }
         stepsGrid.appendChild(card);
       });
       comprarPanel.appendChild(stepsGrid);
+
+      const comprarCta = document.createElement('div');
+      comprarCta.className = 'comprar-cta-row';
+      const verCatalogoBtn = document.createElement('button');
+      verCatalogoBtn.type = 'button';
+      verCatalogoBtn.className = 'btn-primary comprar-cta-catalogo';
+      verCatalogoBtn.textContent = 'Ver catálogo';
+      verCatalogoBtn.addEventListener('click', ()=>{
+        abrirCatalogoCompleto();
+        render();
+        scrollToCatalog();
+      });
+      const waCtaLink = document.createElement('a');
+      waCtaLink.className = 'comprar-cta-wa';
+      waCtaLink.href = waFab.href;
+      waCtaLink.target = '_blank'; waCtaLink.rel = 'noopener';
+      waCtaLink.innerHTML = waCtaIconSvg + '<span>Escríbeme</span>';
+      comprarCta.appendChild(verCatalogoBtn);
+      comprarCta.appendChild(waCtaLink);
+      comprarPanel.appendChild(comprarCta);
 
       // Bloque "Resérvalo": mostramos solo el primer elemento de pagos.
       // El antiguo segundo bloque ("Paga como prefieras") ya no se muestra; esa
@@ -2822,13 +2384,6 @@
     if(fn) fn.value = F.titulo || '';
     if(ft) ft.value = F.subtitulo || '';
 
-    // Cinta de confianza
-    const TK = siteContent.ticker || [];
-    ['txtTicker1','txtTicker2','txtTicker3','txtTicker4'].forEach((id,i)=>{
-      const el = document.getElementById(id);
-      if(el) el.value = TK[i] || '';
-    });
-
     // Mosaicos de portada
     const MOS = siteContent.mosaicos || {};
     const setMos = (clave, ids)=>{
@@ -2842,12 +2397,6 @@
     setMos('novedades', {activo:'mosNovActivo', eyebrow:'mosNovEyebrow', titulo:'mosNovTitulo', clear:'mosNovClear'});
     setMos('ofertas',   {activo:'mosOfeActivo', eyebrow:'mosOfeEyebrow', titulo:'mosOfeTitulo', clear:'mosOfeClear'});
     setMos('preventas', {activo:'mosPreActivo', eyebrow:'mosPreEyebrow', titulo:'mosPreTitulo', clear:'mosPreClear'});
-    setMos('mix', {activo:'mosMixActivo', eyebrow:'mosMixEyebrow', titulo:'mosMixTitulo', clear:'mosMixClear'});
-
-    const ordenValido = ['novedades','ofertas','preventas','mix'];
-    const ordenGuardado = Array.isArray(siteContent.mosaicoOrden) ? siteContent.mosaicoOrden.filter(c=> ordenValido.includes(c)) : [];
-    mosOrdenPend = ordenGuardado.concat(ordenValido.filter(c=> !ordenGuardado.includes(c)));
-    renderMosOrdenList();
 
     // fotos de Japón: copia de trabajo
     japonPend = (Array.isArray(siteContent.japon) ? siteContent.japon : []).map(f=> ({ url: f.url || f.src || '', pie: f.pie || '' }));
@@ -2883,7 +2432,6 @@
     buildSoundEditorGrid();
     textsOverlay.classList.add('show');
     armarAcordeonTextos();
-    setTimeout(()=> textsGuard.snapshot(), 50);
   }
   // Convierte las secciones del editor de textos en acordeón plegable.
   // Agrupa cada .form-section-title con todo su contenido hasta el siguiente título.
@@ -2921,12 +2469,11 @@
     acordeonListo = true;
   }
 
-  function closeTextsForm(force){
-    confirmDiscard(textsGuard, force, ()=> textsOverlay.classList.remove('show'));
+  function closeTextsForm(){
+    textsOverlay.classList.remove('show');
   }
   textsBtn.addEventListener('click', openTextsForm);
-  const textsGuard = makeDirtyGuard(()=> Array.from(textsOverlay.querySelectorAll('input,textarea')).map(el=>el.value));
-  textsCancel.addEventListener('click', ()=> closeTextsForm());
+  textsCancel.addEventListener('click', closeTextsForm);
   textsOverlay.addEventListener('click', (e)=>{ if(e.target === textsOverlay) closeTextsForm(); });
   textsSave.addEventListener('click', async ()=>{
     const val = id => document.getElementById(id).value.trim();
@@ -2978,18 +2525,15 @@
       mosaicos: {
         novedades: leerMosaico('novedades', 'mosNovActivo', 'mosNovEyebrow', 'mosNovTitulo'),
         ofertas:   leerMosaico('ofertas',   'mosOfeActivo', 'mosOfeEyebrow', 'mosOfeTitulo'),
-        preventas: leerMosaico('preventas', 'mosPreActivo', 'mosPreEyebrow', 'mosPreTitulo'),
-        mix: leerMosaico('mix', 'mosMixActivo', 'mosMixEyebrow', 'mosMixTitulo')
+        preventas: leerMosaico('preventas', 'mosPreActivo', 'mosPreEyebrow', 'mosPreTitulo')
       },
-      mosaicoOrden: mosOrdenPend.slice(),
       japon: japonPend.filter(f=> f.url).map(f=> ({ url: f.url, pie: (f.pie||'').trim() })),
       logos: leerLogos(),
       iconos: leerIconos(),
       footer: {
         titulo: (document.getElementById('txtFooterName').value || '').trim(),
         subtitulo: (document.getElementById('txtFooterTag').value || '').trim()
-      },
-      ticker: ['txtTicker1','txtTicker2','txtTicker3','txtTicker4'].map(id=> (document.getElementById(id).value || '').trim())
+      }
     };
     renderSiteContent();
     renderNewArrivals(); renderOfertas(); renderPreventas();
@@ -2998,7 +2542,7 @@
     iconoPend = { sol: '_keep', luna: '_keep', basura: '_keep' };
     aplicarLogo();
     aplicarIconosTema();
-    closeTextsForm(true);
+    closeTextsForm();
     await saveSiteContent();
     showToast('Textos guardados');
   });
@@ -3027,7 +2571,6 @@
         const img = document.createElement('img');
         img.className = 'banner-img';
         img.src = imgSrc(s.image);
-        if(i === 0){ img.fetchPriority = 'high'; } else { img.loading = 'lazy'; }
         img.style.setProperty('--banner-pos-desktop', imgPos(s.image));
         img.style.setProperty('--banner-pos-mobile', imgPos(s.imageMobile));
         img.alt = s.title || '';
@@ -3038,7 +2581,6 @@
         const img = document.createElement('img');
         img.className = 'banner-img';
         img.src = imgSrc(s.image);
-        if(i === 0){ img.fetchPriority = 'high'; } else { img.loading = 'lazy'; }
         img.style.setProperty('--banner-pos-desktop', imgPos(s.image));
         img.style.setProperty('--banner-pos-mobile', imgPos(s.image));
         img.alt = s.title || '';
@@ -3356,7 +2898,6 @@
     resetSlideForm();
     slideModalTitle.textContent = 'Agregar slide';
     slideOverlay.classList.add('show');
-    setTimeout(()=> slideGuard.snapshot(), 50);
   }
 
   function openSlideEdit(s){
@@ -3373,7 +2914,6 @@
     slideDeleteRow.style.display = 'block';
     validateSlideForm();
     slideOverlay.classList.add('show');
-    setTimeout(()=> slideGuard.snapshot(), 50);
   }
 
   bannerBtn.addEventListener('click', ()=>{
@@ -3387,12 +2927,8 @@
     openSlideAdd();
   });
 
-  const slideGuard = makeDirtyGuard(()=> [slideTagInput.value, slideTitleInput.value, slideSubInput.value, slidePendingImage, slidePendingImageMobile]);
-  function closeSlideForm(force){
-    confirmDiscard(slideGuard, force, ()=> slideOverlay.classList.remove('show'));
-  }
-  slideCancel.addEventListener('click', ()=> closeSlideForm());
-  slideOverlay.addEventListener('click', (e)=>{ if(e.target===slideOverlay) closeSlideForm(); });
+  slideCancel.addEventListener('click', ()=> slideOverlay.classList.remove('show'));
+  slideOverlay.addEventListener('click', (e)=>{ if(e.target===slideOverlay) slideOverlay.classList.remove('show'); });
 
   slideSave.addEventListener('click', async ()=>{
     if(!slidePendingImage) return;
@@ -3411,7 +2947,7 @@
       });
       showToast('Slide agregado');
     }
-    closeSlideForm(true);
+    slideOverlay.classList.remove('show');
     await saveBannerSlides();
     renderBanner();
   });
@@ -3420,7 +2956,7 @@
     if(!editingSlideId) return;
     if(!confirm('¿Eliminar este slide del banner?')) return;
     bannerSlides = bannerSlides.filter(s=>s.id!==editingSlideId);
-    closeSlideForm(true);
+    slideOverlay.classList.remove('show');
     await saveBannerSlides();
     renderBanner();
     showToast('Slide eliminado');
@@ -3465,20 +3001,7 @@
   }
 
   function money(v){
-    const n = Number(v);
-    // Los precios nunca llevan centavos (siempre son montos enteros).
-    return 'S/\u00A0' + (Number.isInteger(n) ? n : Math.round(n));
-  }
-
-  // Versión con la moneda y los centavos (si los hay) en superíndice, para las
-  // tarjetas de producto. Si el precio es un entero no se agrega nada de más.
-  function moneyHtml(v){
-    const n = Number(v);
-    const whole = Math.floor(n);
-    const cents = Math.round((n - whole) * 100);
-    let html = '<span class="price-currency">S/</span>' + whole;
-    if(cents > 0) html += '<sup class="price-cents">' + String(cents).padStart(2,'0') + '</sup>';
-    return html;
+    return 'S/\u00A0' + Number(v).toFixed(2);
   }
 
   function stateLabel(s){
@@ -3536,8 +3059,7 @@
     const tokens = t.split(/\s+/).filter(Boolean);
     return tokens.every(tok=>{
       if(nt.includes(tok)) return true;
-      if(tok.length <= 3) return false; // términos muy cortos: sin tolerancia a errores, evita falsos positivos
-      const maxDist = tok.length <= 5 ? 1 : (tok.length <= 8 ? 1 : 2);
+      const maxDist = tok.length <= 4 ? 1 : 2;
       return words.some(w=>{
         if(w.includes(tok)) return true;
         if(Math.abs(w.length - tok.length) > maxDist) {
@@ -3555,18 +3077,17 @@
     const term = searchTerm.trim().toLowerCase();
     const filtered = sortProducts(products.filter(p=>{
       if(currentFilter === 'all'){
-        if(p.status === 'vendido' && !term) return false;
+        if(p.status === 'vendido') return false;
       } else if(p.status !== currentFilter){
         return false;
       }
-      if(showOnlyMix && !(Array.isArray(p.variants) && p.variants.length)) return false;
+      if(showFavsOnly && !favorites.has(p.id)) return false;
       if(activeCategories.size > 0 && !activeCategories.has(p.category || 'otros')) return false;
       const _precio = Number(p.price) || 0;
       if(precioMin !== null && _precio < precioMin) return false;
       if(precioMax !== null && _precio > precioMax) return false;
       if(window._soloOfertas && !(p.oldPrice && p.oldPrice > p.price)) return false;
-      const variantNames = Array.isArray(p.variants) ? p.variants.map(v=> v.name || '').join(' ') : '';
-      if(term && !fuzzyMatch(searchTerm, (p.name || '') + ' ' + (p.desc || '') + ' ' + (p.category || '') + ' ' + variantNames + ' ' + (Array.isArray(p.tags) ? p.tags.join(' ') : (p.tags || '')))) return false;
+      if(term && !fuzzyMatch(searchTerm, (p.name || '') + ' ' + (p.desc || '') + ' ' + (p.category || '') + ' ' + (Array.isArray(p.tags) ? p.tags.join(' ') : (p.tags || '')))) return false;
       return true;
     }));
 
@@ -3577,14 +3098,11 @@
     const prevScrollY = keepPosition ? window.scrollY : 0;
 
     grid.innerHTML = '';
-    const hasActiveFilters = currentFilter !== 'all' || activeCategories.size > 0 || precioMin !== null || precioMax !== null || term !== '' || showOnlyMix;
-    const clearInline = document.getElementById('clearFiltersInline');
-    if(clearInline) clearInline.hidden = !hasActiveFilters;
+    const hasActiveFilters = currentFilter !== 'all' || activeCategories.size > 0 || precioMin !== null || precioMax !== null || term !== '';
 
     if(filtered.length === 0){
       emptyState.style.display = 'block';
       resultCount.style.display = 'none';
-      const emptyIcon = document.getElementById('emptyIconImg');
       if(products.length === 0){
         emptyTitle.textContent = 'La vitrina está vacía';
         emptySub.textContent = isAdmin ? 'Toca "Agregar producto" para subir el primero.' : 'Vuelve pronto, estamos preparando el catálogo.';
@@ -3599,16 +3117,11 @@
       }
     } else {
       emptyState.style.display = 'none';
+      resultCount.style.display = 'block';
       const n = filtered.length;
-      if(term === ''){
-        resultCount.style.display = 'none';
-      } else {
-        resultCount.style.display = 'block';
-        const label = hasActiveFilters
-          ? (n === 1 ? ' producto encontrado' : ' productos encontrados')
-          : (n === 1 ? ' producto' : ' productos');
-        animateCount(resultCount, n, label);
-      }
+      resultCount.textContent = hasActiveFilters
+        ? (n === 1 ? '1 producto encontrado' : n + ' productos encontrados')
+        : (n === 1 ? '1 producto' : n + ' productos');
     }
 
     filteredCache = filtered;
@@ -3680,7 +3193,7 @@
     const teaser = document.getElementById('catalogTeaserSection');
     const fullView = document.getElementById('catalogFullView');
     if(teaser) teaser.style.display = 'none';
-    if(fullView && fullView.style.display === 'none'){ fullView.style.display = 'block'; moveChipThumb(); }
+    if(fullView && fullView.style.display === 'none') fullView.style.display = 'block';
   }
 
   // Cierra el catálogo completo y vuelve al adelanto. Se usa al navegar a otras
@@ -3712,10 +3225,6 @@
       return products.filter(p=> p.status === 'preventa')
         .slice().sort((a,b)=> b.createdAt - a.createdAt).slice(0, 10);
     }
-    if(clave === 'mix'){
-      return products.filter(p=> Array.isArray(p.variants) && p.variants.length)
-        .slice().sort((a,b)=> b.createdAt - a.createdAt).slice(0, 10);
-    }
     return [];
   }
 
@@ -3724,9 +3233,7 @@
     const section = document.getElementById('destacadosPortada');
     if(!grid || !section) return;
     grid.innerHTML = '';
-    const ordenValido = ['novedades','ofertas','preventas','mix'];
-    const ordenGuardado = (Array.isArray(siteContent.mosaicoOrden) ? siteContent.mosaicoOrden.filter(c=> ordenValido.includes(c)) : []);
-    const orden = ordenGuardado.concat(ordenValido.filter(c=> !ordenGuardado.includes(c)));
+    const orden = ['novedades','ofertas','preventas'];
     let mostrados = 0;
     orden.forEach(clave=>{
       const cfg = (siteContent.mosaicos && siteContent.mosaicos[clave]) || {};
@@ -3758,15 +3265,8 @@
     return null;
   }
 
-  const MOSAICO_DEFAULTS = {
-    novedades: { eyebrow:'Recién llegados', titulo:'Novedades' },
-    ofertas:   { eyebrow:'Por tiempo limitado', titulo:'Ofertas' },
-    preventas: { eyebrow:'Asegura el tuyo', titulo:'Preventas' },
-    mix:       { eyebrow:'Completa tu cole', titulo:'Sueltos' }
-  };
   function construirMosaico(clave, productos, onClick){
     const cfg = (siteContent.mosaicos && siteContent.mosaicos[clave]) || {};
-    const def = MOSAICO_DEFAULTS[clave] || {};
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'mosaico mosaico-' + clave;
@@ -3815,8 +3315,8 @@
 
     const ct = document.createElement('div');
     ct.className = 'mosaico-ct';
-    ct.innerHTML = '<div class="mosaico-eb">' + (cfg.eyebrow || def.eyebrow || '') + '</div>' +
-                   '<div class="mosaico-tt">' + (cfg.titulo || def.titulo || '') + '</div>' +
+    ct.innerHTML = '<div class="mosaico-eb">' + (cfg.eyebrow || '') + '</div>' +
+                   '<div class="mosaico-tt">' + (cfg.titulo || '') + '</div>' +
                    '<span class="mosaico-go">Ver todo ›</span>';
     card.appendChild(ct);
     return card;
@@ -3825,23 +3325,6 @@
 
 
   // Abre el catálogo completo aplicando un filtro concreto (para los mosaicos).
-  // El banner de "Ofertas" no tiene chip visible que lo represente; si queda activo
-  // y el usuario busca algo, hay que soltarlo para no limitar la búsqueda a esas ofertas.
-  // Los chips "Preventa" y "Sueltos" sí son visibles, así que la búsqueda los respeta.
-  function limpiarFiltrosDeBanner(){
-    if(window._soloOfertas) window._soloOfertas = false;
-  }
-
-  // Al escribir una búsqueda, el chip de estado (Disponible/Preventa/Vendido) se
-  // desactiva y vuelve a "Todos" — pero el usuario puede volver a aplicar un chip
-  // después, y ese filtro se combina normalmente con el término buscado.
-  function resetChipDeEstadoPorBusqueda(){
-    if(currentFilter === 'all') return;
-    currentFilter = 'all';
-    filterChips.querySelectorAll('.chip').forEach(c=> c.classList.toggle('active', c.dataset.filter === 'all'));
-    moveChipThumb();
-  }
-
   function irACatalogoConFiltro(tipo){
     // limpia filtros previos
     currentFilter = 'all';
@@ -3849,16 +3332,10 @@
     precioMin = null; precioMax = null;
     window._soloOfertas = false;
     searchTerm = '';
-    showOnlyMix = false;
-    mixToggle.classList.remove('active');
     if(tipo === 'ofertas'){
       // ofertas = productos con precio anterior (descuento). Se marca por orden especial.
       currentFilter = 'all';
       window._soloOfertas = true;
-    } else if(tipo === 'mix'){
-      currentFilter = 'all';
-      showOnlyMix = true;
-      mixToggle.classList.add('active');
     } else {
       window._soloOfertas = false;
       if(tipo === 'preventas') currentFilter = 'preventa';
@@ -3867,7 +3344,6 @@
     // reflejar en los chips de filtro
     const fc = document.getElementById('filterChips');
     if(fc) fc.querySelectorAll('.chip').forEach(c=> c.classList.toggle('active', c.dataset.filter === currentFilter));
-    moveChipThumb();
     abrirCatalogoCompleto();
     render();
     const target = document.querySelector('#catalogFullView .catalogo-title');
@@ -3879,30 +3355,23 @@
 
   function renderNextPage(){
     const slice = filteredCache.slice(shownCount, shownCount + PAGE_SIZE);
-    slice.forEach((p,i)=>{
-      const card = buildCard(p);
-      card.classList.add('card-enter');
-      card.style.animationDelay = Math.min(i, 10) * 35 + 'ms';
-      grid.appendChild(card);
-    });
+    slice.forEach(p=> grid.appendChild(buildCard(p)));
     shownCount += slice.length;
     updateLoadMore();
   }
 
   function updateLoadMore(){
-    const lmText = loadMoreBtn.querySelector('.lm-text');
     if(shownCount < filteredCache.length){
       loadMoreWrap.style.display = 'flex';
-      if(lmText) lmText.textContent = 'Ver más (' + (filteredCache.length - shownCount) + ' restantes)';
+      loadMoreBtn.textContent = 'Ver más (' + (filteredCache.length - shownCount) + ' restantes)';
     } else {
       loadMoreWrap.style.display = 'none';
     }
-    loadMoreBtn.classList.remove('loading');
   }
 
   function buildCard(p){
       const card = document.createElement('div');
-      card.className = 'card ' + p.status + (p.shiny ? ' shiny' : '') + ((Array.isArray(p.variants) && p.variants.length) ? ' card-lot' : '');
+      card.className = 'card ' + p.status + (p.shiny ? ' shiny' : '');
       card.dataset.pid = p.id;
       card.addEventListener('mousemove', (e)=>{
         const r = card.getBoundingClientRect();
@@ -3910,7 +3379,7 @@
         card.style.setProperty('--my', (e.clientY-r.top)+'px');
       });
       card.addEventListener('click', (e)=>{
-        if(e.target.closest('.card-nav, .wa-btn, .icon-btn, .mini-btn, .zoom-hint, .card-dots, .card-zoom-btn')) return;
+        if(e.target.closest('.card-nav, .wa-btn, .icon-btn, .mini-btn, .zoom-hint, .card-dots')) return;
         if(isAdmin && modoSeleccion){ alternarSeleccion(p.id, card); return; }
         openQuickView(p);
       });
@@ -3938,17 +3407,6 @@
         media.appendChild(newBadge);
       }
 
-      if(Array.isArray(p.variants) && p.variants.length && images.length){
-        const zoomBtn = document.createElement('button');
-        zoomBtn.type = 'button';
-        zoomBtn.className = 'card-zoom-btn';
-        zoomBtn.title = 'Ver foto en grande';
-        zoomBtn.setAttribute('aria-label', 'Ver foto en grande');
-        zoomBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6" stroke-linecap="round"/></svg>';
-        zoomBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openLightbox(images, 0); });
-        media.appendChild(zoomBtn);
-      }
-
       const hasDiscount = p.oldPrice && p.oldPrice > p.price;
       if(hasDiscount){
         const discountBadge = document.createElement('div');
@@ -3965,12 +3423,34 @@
       }
       if(p.shiny){
         media.insertAdjacentHTML('beforeend',
-          '<span class="badge-shiny">'+SPARK_SVG+' TOP</span>' +
+          '<span class="badge-shiny">'+SPARK_SVG+' Shiny</span>' +
           '<span class="sh-spark a">'+SPARK_SVG+'</span>' +
           '<span class="sh-spark b">'+SPARK_SVG+'</span>' +
           '<span class="sh-spark c">'+SPARK_SVG+'</span>');
       }
 
+      const favBtn = document.createElement('button');
+      favBtn.type = 'button';
+      favBtn.className = 'fav-btn' + (favorites.has(p.id) ? ' active' : '');
+      favBtn.title = 'Guardar en favoritos';
+      favBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
+      favBtn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        if(favorites.has(p.id)) favorites.delete(p.id);
+        else favorites.add(p.id);
+        saveFavorites();
+        // Un mismo producto puede aparecer duplicado (catálogo + "Recién llegados"),
+        // así que reflejamos el cambio en todas las copias, no solo en la que se tocó.
+        document.querySelectorAll('.card[data-pid="' + p.id + '"] .fav-btn').forEach(btn=>{
+          btn.classList.toggle('active', favorites.has(p.id));
+        });
+        updateFavToggle();
+        if(showFavsOnly){
+          if(favorites.size === 0){ showFavsOnly = false; updateFavToggle(); }
+          render(true);
+        }
+      });
+      media.appendChild(favBtn);
 
       if(images.length){
         let idx = 0;
@@ -4059,18 +3539,7 @@
       }
 
       let priceEl;
-      if(Array.isArray(p.variants) && p.variants.length){
-        const tag = document.createElement('div');
-        tag.className = 'variant-tag';
-        const disponibles = p.variants.filter(v=>!v.sold);
-        tag.textContent = disponibles.length + ' figuras disponibles';
-        body.appendChild(tag);
-        priceEl = document.createElement('div');
-        priceEl.className = 'card-price';
-        const priceSource = disponibles.length ? disponibles : p.variants;
-        const minP = Math.min(...priceSource.map(v=>v.price));
-        priceEl.innerHTML = '<span class="price-from">Desde</span>' + money(minP);
-      } else if(hasDiscount && p.status !== 'vendido'){
+      if(hasDiscount && p.status !== 'vendido'){
         priceEl = document.createElement('div');
         priceEl.className = 'price-group';
         const oldP = document.createElement('span');
@@ -4086,40 +3555,19 @@
         priceEl.className = 'card-price' + (p.status==='vendido' ? ' vendido-price' : '');
         priceEl.textContent = money(p.price);
       }
+      body.appendChild(priceEl);
 
-      if(Array.isArray(p.variants) && p.variants.length){
-        body.appendChild(priceEl);
-        const variosBtn = document.createElement('button');
-        variosBtn.type = 'button';
-        variosBtn.className = 'card-add-btn card-variants-btn';
-        variosBtn.setAttribute('aria-label', 'Ver varios modelos');
-        variosBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Varios modelos</span>';
-        variosBtn.addEventListener('click', (e)=>{
+      if(p.status !== 'vendido'){
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'card-add-btn';
+        addBtn.setAttribute('aria-label', 'Agregar al carrito');
+        addBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.6L22 8H6.2"/><circle cx="9.5" cy="20" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg><span>Agregar al carrito</span>';
+        addBtn.addEventListener('click', (e)=>{
           e.stopPropagation();
-          openQuickView(p);
+          addToInquiryList(p.id);
         });
-        body.appendChild(variosBtn);
-      } else {
-        const priceRow = document.createElement('div');
-        priceRow.className = 'card-price-row';
-        priceRow.appendChild(priceEl);
-        if(p.status !== 'vendido'){
-          const enCarrito = inquiryList.some(it=> it.id === p.id);
-          const addBtn = document.createElement('button');
-          addBtn.type = 'button';
-          addBtn.className = 'card-add-icon' + (enCarrito ? ' added' : '');
-          addBtn.title = enCarrito ? 'Quitar del carrito' : 'Agregar al carrito';
-          addBtn.setAttribute('aria-label', addBtn.title);
-          addBtn.innerHTML = enCarrito ? CHECK_SVG : CART_SVG;
-          addBtn.addEventListener('click', (e)=>{
-            e.stopPropagation();
-            const yaEstaba = inquiryList.some(it=> it.id === p.id);
-            if(yaEstaba) removeFromInquiryList(p.id);
-            else{ addToInquiryList(p.id); actualizarBotonesAgregar(p.id); }
-          });
-          priceRow.appendChild(addBtn);
-        }
-        body.appendChild(priceRow);
+        body.appendChild(addBtn);
       }
 
       if(isAdmin && modoSeleccion){
@@ -4152,7 +3600,7 @@
         editB.className = 'icon-btn' + (p.notes ? ' has-notes' : '');
         editB.title = p.notes ? ('Editar · Nota: ' + p.notes.slice(0, 60)) : 'Editar';
         editB.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
-        editB.addEventListener('click', ()=> (Array.isArray(p.variants) && p.variants.length) ? openLotEdit(p) : openEdit(p));
+        editB.addEventListener('click', ()=> openEdit(p));
         row.appendChild(editB);
         body.appendChild(row);
       }
@@ -4446,7 +3894,7 @@
     resetForm();
     modalTitle.textContent = 'Agregar producto';
     productOverlay.classList.add('show');
-    setTimeout(()=>{ nameInput.focus(); snapshotProductForm(); }, 50);
+    setTimeout(()=> nameInput.focus(), 50);
   }
 
   function openEdit(p){
@@ -4465,7 +3913,6 @@
     pendingRelated = Array.isArray(p.related) ? p.related.slice() : [];
     renderRelatedChosen();
     if(relatedSearchEl) relatedSearchEl.value = '';
-    renderThumbStrip();
     if(relatedResultsEl) relatedResultsEl.classList.remove('show');
     expectedDateInput.value = p.expectedDate || '';
     youtubeInput.value = p.youtubeUrl || '';
@@ -4478,52 +3925,15 @@
     deleteRow.style.display = 'block';
     validateForm();
     productOverlay.classList.add('show');
-    setTimeout(snapshotProductForm, 50);
   }
 
-  function makeDirtyGuard(getSnapshotFn){
-    let saved = '';
-    return {
-      snapshot(){ saved = JSON.stringify(getSnapshotFn()); },
-      isDirty(){ return saved !== '' && saved !== JSON.stringify(getSnapshotFn()); },
-      clear(){ saved = ''; }
-    };
-  }
-  function confirmDiscard(guard, force, closeFn){
-    if(!force && guard.isDirty()){
-      if(!confirm('Tienes cambios sin guardar. \u00bfSalir y descartarlos?')) return;
-    }
-    guard.clear();
-    closeFn();
-  }
-
-  let productFormSnapshot = '';
-  function currentProductFormSnapshot(){
-    return JSON.stringify({
-      images: pendingImages, name: nameInput.value, price: priceInput.value, oldPrice: oldPriceInput.value,
-      reserva: reservaInput ? reservaInput.value : '', desc: descInput.value, notes: notesInput.value,
-      tags: tagsInput.value, related: pendingRelated, expectedDate: expectedDateInput.value,
-      youtube: youtubeInput.value, allowQty: allowQuantityInput.checked, shiny: shinyInput.checked,
-      state: editingState, category: editingCategory
-    });
-  }
-  function snapshotProductForm(){ productFormSnapshot = currentProductFormSnapshot(); }
-  function productFormIsDirty(){ return productFormSnapshot !== '' && productFormSnapshot !== currentProductFormSnapshot(); }
-
-  function closeModal(force){
-    if(!force && productFormIsDirty()){
-      if(!confirm('Tienes cambios sin guardar en este producto. ¿Salir y descartarlos?')) return;
-    }
-    productFormSnapshot = '';
+  function closeModal(){
     productOverlay.classList.remove('show');
   }
 
   addBtn.addEventListener('click', openAdd);
-  cancelBtn.addEventListener('click', ()=> closeModal());
+  cancelBtn.addEventListener('click', closeModal);
   productOverlay.addEventListener('click', (e)=>{ if(e.target === productOverlay) closeModal(); });
-  document.addEventListener('keydown', (e)=>{
-    if(e.key === 'Escape' && productOverlay.classList.contains('show')) closeModal();
-  });
 
   saveBtn.addEventListener('click', async ()=>{
     const name = nameInput.value.trim();
@@ -4600,7 +4010,7 @@
       savedProduct = newProduct;
       showToast('Producto agregado a la vitrina');
     }
-    closeModal(true);
+    closeModal();
     render(true);
     try{ await window.fbSaveProduct(savedProduct); publicarCatalogo(); }catch(e){ showToast('No se pudo guardar. Intenta de nuevo.'); }
   });
@@ -4610,260 +4020,10 @@
     if(!confirm('¿Eliminar este producto del catálogo?')) return;
     const idToDelete = editingId;
     products = products.filter(p=>p.id !== idToDelete);
-    closeModal(true);
+    closeModal();
     render(true);
     try{ await window.fbDeleteProduct(idToDelete); publicarCatalogo(); }catch(e){ showToast('No se pudo eliminar. Intenta de nuevo.'); }
     showToast('Producto eliminado');
-  });
-
-  // ================= modal "Agregar varios productos" (lote) =================
-  const lotOverlay = document.getElementById('lotOverlay');
-  const lotUploadBox = document.getElementById('lotUploadBox');
-  const lotUploadHint = document.getElementById('lotUploadHint');
-  const lotImageInput = document.getElementById('lotImageInput');
-  const lotThumbStrip = document.getElementById('lotThumbStrip');
-  const lotImageLinkInput = document.getElementById('lotImageLinkInput');
-  const lotImageLinkBtn = document.getElementById('lotImageLinkBtn');
-  const lotNameInput = document.getElementById('lotNameInput');
-  const lotDescInput = document.getElementById('lotDescInput');
-  const lotVariantList = document.getElementById('lotVariantList');
-  const lotAddVariantBtn = document.getElementById('lotAddVariantBtn');
-  const lotCategorySelect = document.getElementById('lotCategorySelect');
-  const lotFormError = document.getElementById('lotFormError');
-  const lotCancelBtn = document.getElementById('lotCancelBtn');
-  const lotSaveBtn = document.getElementById('lotSaveBtn');
-  const lotModalTitle = document.getElementById('lotModalTitle');
-  const lotDeleteRow = document.getElementById('lotDeleteRow');
-  const lotDeleteBtn = document.getElementById('lotDeleteBtn');
-  const lotFullPriceInput = document.getElementById('lotFullPriceInput');
-  let editingLotId = null;
-
-  let pendingLotImages = [];
-  let lotVariantRows = []; // {id, nameEl, noteEl, priceEl}
-  let lotCategory = 'figuras';
-
-  function lotUpdateUploadHint(){
-    lotUploadHint.textContent = pendingLotImages.length
-      ? pendingLotImages.length + ' foto(s) agregada(s) · toca para añadir más'
-      : 'Toca para subir una o más fotos';
-  }
-  function lotRenderThumbStrip(){
-    lotThumbStrip.innerHTML = '';
-    pendingLotImages.forEach((im, idx)=>{
-      const t = document.createElement('div');
-      t.className = 'thumb';
-      const img = document.createElement('img');
-      img.src = imgSrc(im); img.style.objectPosition = imgPos(im);
-      t.appendChild(img);
-      const rm = document.createElement('button');
-      rm.type = 'button'; rm.className = 'thumb-remove'; rm.innerHTML = '✕';
-      rm.title = 'Quitar foto';
-      rm.addEventListener('click', ()=>{ pendingLotImages.splice(idx,1); lotRenderThumbStrip(); lotUpdateUploadHint(); });
-      t.appendChild(rm);
-      lotThumbStrip.appendChild(t);
-    });
-  }
-  lotUploadBox.addEventListener('click', (e)=>{ if(e.target === lotUploadBox || e.target === lotUploadHint) lotImageInput.click(); });
-  lotImageInput.addEventListener('change', async (e)=>{
-    const files = Array.from(e.target.files || []);
-    if(!files.length) return;
-    const room = MAX_IMAGES - pendingLotImages.length;
-    if(room <= 0){ showToast('Máximo ' + MAX_IMAGES + ' fotos'); lotImageInput.value=''; return; }
-    const toProcess = files.slice(0, room);
-    const total = toProcess.length;
-    lotUploadHint.textContent = 'Subiendo ' + total + ' foto' + (total>1?'s':'') + '...';
-    const slots = new Array(total).fill(null);
-    let listas = 0;
-    const tareas = toProcess.map(async (file, i)=>{
-      try{
-        const resizedBlob = await resizeImageToBlob(file);
-        const url = await window.fbUploadImage(resizedBlob);
-        slots[i] = { src: url, pos: '50% 50%' };
-        listas++;
-        lotUploadHint.textContent = 'Subiendo ' + listas + ' de ' + total + '...';
-      }catch(err){ console.error(err); }
-    });
-    await Promise.all(tareas);
-    slots.forEach(s=>{ if(s) pendingLotImages.push(s); });
-    lotRenderThumbStrip();
-    lotUpdateUploadHint();
-    lotImageInput.value = '';
-    lotValidate();
-  });
-
-  function lotVariantRow(data){
-    data = data || { name:'', note:'', price:'' };
-    const row = document.createElement('div');
-    row.className = 'variant-editor-row';
-    const info = document.createElement('div');
-    const nameInp = document.createElement('input');
-    nameInp.type = 'text'; nameInp.placeholder = 'Nombre de la pieza'; nameInp.value = data.name;
-    const noteInp = document.createElement('input');
-    noteInp.type = 'text'; noteInp.placeholder = 'Nota (opcional): estado, edición...'; noteInp.value = data.note;
-    info.appendChild(nameInp); info.appendChild(noteInp);
-    const priceWrap = document.createElement('div');
-    priceWrap.className = 'variant-editor-price';
-    const span = document.createElement('span'); span.textContent = 'S/';
-    const priceInp = document.createElement('input');
-    priceInp.type = 'number'; priceInp.min = '0'; priceInp.step = '0.01'; priceInp.placeholder = '0.00'; priceInp.value = data.price;
-    priceWrap.appendChild(span); priceWrap.appendChild(priceInp);
-    const rmBtn = document.createElement('button');
-    rmBtn.type = 'button'; rmBtn.className = 'variant-remove-btn'; rmBtn.innerHTML = '✕';
-    rmBtn.addEventListener('click', ()=>{
-      if(lotVariantRows.length <= 1){ showToast('Debe quedar al menos una pieza'); return; }
-      row.remove();
-      lotVariantRows = lotVariantRows.filter(r=>r.row !== row);
-      lotValidate();
-    });
-    [nameInp, noteInp, priceInp].forEach(inp=> inp.addEventListener('input', lotValidate));
-    row.appendChild(info); row.appendChild(priceWrap); row.appendChild(rmBtn);
-    if(data.sold){
-      const soldTag = document.createElement('span');
-      soldTag.className = 'variant-sold-toggle active';
-      soldTag.style.gridColumn = '1 / -1';
-      soldTag.style.textAlign = 'center';
-      soldTag.textContent = 'Vendida (cámbialo desde la ficha del producto)';
-      row.appendChild(soldTag);
-    }
-    lotVariantList.appendChild(row);
-    lotVariantRows.push({ row, nameInp, noteInp, priceInp, sold: !!data.sold });
-  }
-  lotAddVariantBtn.addEventListener('click', ()=> lotVariantRow());
-  lotImageLinkBtn.addEventListener('click', ()=>{
-    const url = lotImageLinkInput.value.trim();
-    if(!url) return;
-    if(pendingLotImages.length >= MAX_IMAGES){ showToast('Máximo ' + MAX_IMAGES + ' fotos'); return; }
-    pendingLotImages.push({ src: url, pos: '50% 50%' });
-    lotImageLinkInput.value = '';
-    lotRenderThumbStrip(); lotUpdateUploadHint(); lotValidate();
-  });
-
-  lotCategorySelect.querySelectorAll('button').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      lotCategory = btn.dataset.category;
-      lotCategorySelect.querySelectorAll('button').forEach(b=> b.classList.toggle('sel', b===btn));
-    });
-  });
-
-  function lotValidate(){
-    const errs = [];
-    if(!lotNameInput.value.trim()) errs.push('Ponle un nombre al lote.');
-    if(!pendingLotImages.length) errs.push('Sube al menos una foto de portada.');
-    const validVariants = lotVariantRows.filter(r=> r.nameInp.value.trim() && Number(r.priceInp.value) > 0);
-    if(!validVariants.length) errs.push('Agrega al menos una pieza con nombre y precio.');
-    lotSaveBtn.disabled = errs.length > 0;
-    lotFormError.style.display = 'none';
-    return errs;
-  }
-
-  function lotResetForm(){
-    editingLotId = null;
-    pendingLotImages = [];
-    lotVariantRows = [];
-    lotVariantList.innerHTML = '';
-    lotNameInput.value = ''; lotDescInput.value = ''; lotFullPriceInput.value = '';
-    lotCategory = 'figuras';
-    lotCategorySelect.querySelectorAll('button').forEach(b=> b.classList.toggle('sel', b.dataset.category==='figuras'));
-    lotRenderThumbStrip(); lotUpdateUploadHint();
-    lotVariantRow(); lotVariantRow();
-    lotDeleteRow.style.display = 'none';
-    lotModalTitle.textContent = 'Agregar varios productos';
-    lotValidate();
-  }
-
-  const lotGuard = makeDirtyGuard(()=> ({
-    images: pendingLotImages, name: lotNameInput.value, desc: lotDescInput.value, category: lotCategory,
-    fullPrice: lotFullPriceInput.value,
-    variants: lotVariantRows.map(r=>[r.nameInp.value, r.noteInp.value, r.priceInp.value])
-  }));
-
-  function openLotAdd(){
-    lotResetForm();
-    lotOverlay.classList.add('show');
-    setTimeout(()=>{ lotNameInput.focus(); lotGuard.snapshot(); }, 50);
-  }
-  function openLotEdit(p){
-    lotResetForm();
-    editingLotId = p.id;
-    pendingLotImages = (p.images || []).map(normalizeImg);
-    lotNameInput.value = p.name;
-    lotDescInput.value = p.desc || '';
-    lotFullPriceInput.value = (p.lotPrice != null && p.lotPrice !== '') ? p.lotPrice : '';
-    lotCategory = p.category || 'figuras';
-    lotCategorySelect.querySelectorAll('button').forEach(b=> b.classList.toggle('sel', b.dataset.category===lotCategory));
-    lotVariantList.innerHTML = '';
-    lotVariantRows = [];
-    (p.variants || []).forEach(v=> lotVariantRow({ name: v.name, note: v.note || '', price: v.price, sold: v.sold }));
-    lotRenderThumbStrip(); lotUpdateUploadHint();
-    lotDeleteRow.style.display = 'block';
-    lotModalTitle.textContent = 'Editar lote';
-    lotValidate();
-    lotOverlay.classList.add('show');
-    setTimeout(()=> lotGuard.snapshot(), 50);
-  }
-  function closeLotModal(force){
-    confirmDiscard(lotGuard, force, ()=> lotOverlay.classList.remove('show'));
-  }
-  lotBtn.addEventListener('click', openLotAdd);
-  lotCancelBtn.addEventListener('click', ()=> closeLotModal());
-  lotOverlay.addEventListener('click', (e)=>{ if(e.target === lotOverlay) closeLotModal(); });
-  document.addEventListener('keydown', (e)=>{
-    if(e.key === 'Escape' && lotOverlay.classList.contains('show')) closeLotModal();
-  });
-
-  lotSaveBtn.addEventListener('click', async ()=>{
-    const errs = lotValidate();
-    if(errs.length){ lotFormError.textContent = errs[0]; lotFormError.style.display = 'block'; return; }
-    const variants = lotVariantRows
-      .filter(r=> r.nameInp.value.trim() && Number(r.priceInp.value) > 0)
-      .map((r,i)=>({ id: 'v_' + Date.now() + '_' + i, name: r.nameInp.value.trim(), note: r.noteInp.value.trim(), price: Number(r.priceInp.value), sold: !!r.sold }));
-    const minPrice = Math.min(...variants.map(v=>v.price));
-    const lotFullPrice = Number(lotFullPriceInput.value) > 0 ? Number(lotFullPriceInput.value) : null;
-    if(editingLotId){
-      const p = products.find(x=>x.id===editingLotId);
-      p.name = lotNameInput.value.trim();
-      p.desc = lotDescInput.value.trim();
-      p.price = minPrice;
-      p.images = pendingLotImages.slice();
-      p.category = lotCategory;
-      p.variants = variants;
-      p.lotPrice = lotFullPrice;
-      closeLotModal(true);
-      render(true);
-      showToast('Lote actualizado');
-      try{ await window.fbSaveProduct(p); publicarCatalogo(); }catch(e){ showToast('No se pudo guardar. Intenta de nuevo.'); }
-      return;
-    }
-    const newProduct = {
-      id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
-      name: lotNameInput.value.trim(),
-      price: minPrice,
-      desc: lotDescInput.value.trim(),
-      status: 'disponible',
-      images: pendingLotImages.slice(),
-      category: lotCategory,
-      variants,
-      lotPrice: lotFullPrice,
-      oldPrice: null, reserva: null, notes: '', tags: [], related: [],
-      expectedDate: '', youtubeUrl: '', allowQuantity: false, shiny: false,
-      createdAt: Date.now()
-    };
-    products.unshift(newProduct);
-    closeLotModal(true);
-    render(true);
-    showToast('Lote agregado con ' + variants.length + ' pieza(s)');
-    try{ await window.fbSaveProduct(newProduct); publicarCatalogo(); }catch(e){ showToast('No se pudo guardar. Intenta de nuevo.'); }
-  });
-
-  lotDeleteBtn.addEventListener('click', async ()=>{
-    if(!editingLotId) return;
-    if(!confirm('¿Eliminar este lote del catálogo?')) return;
-    const idToDelete = editingLotId;
-    products = products.filter(p=>p.id !== idToDelete);
-    closeLotModal(true);
-    render(true);
-    showToast('Lote eliminado');
-    try{ await window.fbDeleteProduct(idToDelete); publicarCatalogo(); }catch(e){ showToast('No se pudo eliminar. Intenta de nuevo.'); }
   });
 
   function scrollToCatalog(){
@@ -4881,78 +4041,34 @@
     filterChips.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
     chip.classList.add('active');
     currentFilter = chip.dataset.filter;
-    window._soloOfertas = false;
-    showOnlyMix = false;
-    if(mixToggle) mixToggle.classList.remove('active');
-    moveChipThumb();
     render();
   });
 
-  function aplicarCategoria(cat){
+  categoryChips.addEventListener('click', (e)=>{
+    const chip = e.target.closest('.chip-light');
+    if(!chip) return;
+    const cat = chip.dataset.category;
+    // Selección ÚNICA: solo una categoría activa a la vez.
+    // Si tocas la que ya está activa, se desactiva y vuelve a "Todas".
     if(cat === 'all' || activeCategories.has(cat)){
       activeCategories.clear();
     } else {
       activeCategories.clear();
       activeCategories.add(cat);
     }
-    categoryChips.querySelectorAll('.chip-light[data-category]').forEach(c=>{
+    categoryChips.querySelectorAll('.chip-light').forEach(c=>{
       const cc = c.dataset.category;
       if(cc === 'all') c.classList.toggle('active', activeCategories.size === 0);
       else c.classList.toggle('active', activeCategories.has(cc));
     });
-    const sel = document.getElementById('compactCatSelect');
-    if(sel) sel.value = activeCategories.size ? [...activeCategories][0] : 'all';
     render();
-  }
-
-  categoryChips.addEventListener('click', (e)=>{
-    const chip = e.target.closest('.chip-light');
-    if(!chip || !chip.dataset.category) return;
-    aplicarCategoria(chip.dataset.category);
   });
-
-  const compactCatSelect = document.getElementById('compactCatSelect');
-  if(compactCatSelect){
-    compactCatSelect.addEventListener('change', ()=>{
-      abrirCatalogoCompleto();
-      aplicarCategoria(compactCatSelect.value);
-      const target = document.getElementById('catalogoFullTitle');
-      if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
-    });
-  }
 
   // ---------- filtro de precio: desde / hasta ----------
   const precioMinInput = document.getElementById('precioMin');
   const precioMaxInput = document.getElementById('precioMax');
   const precioLimpiar  = document.getElementById('precioLimpiar');
-  const precioToggle = document.getElementById('precioToggle');
-  const precioToggleLabel = document.getElementById('precioToggleLabel');
-  const precioFila = document.getElementById('precioFila');
   let precioTimer = null;
-
-  function actualizarPrecioToggle(){
-    if(!precioToggle || !precioToggleLabel) return;
-    const hay = precioMin !== null || precioMax !== null;
-    precioToggleLabel.textContent = hay
-      ? `S/ ${precioMin ?? 0} – ${precioMax ?? 'sin tope'}`
-      : 'S/';
-    precioToggle.classList.toggle('active', hay);
-  }
-  if(precioToggle && precioFila){
-    precioToggle.addEventListener('click', ()=>{
-      const open = precioFila.classList.toggle('show');
-      precioToggle.classList.toggle('open', open);
-      precioToggle.setAttribute('aria-expanded', String(open));
-      if(open) precioMinInput?.focus();
-    });
-    document.addEventListener('click', (e)=>{
-      if(!precioFila.classList.contains('show')) return;
-      if(precioFila.contains(e.target) || precioToggle.contains(e.target)) return;
-      precioFila.classList.remove('show');
-      precioToggle.classList.remove('open');
-      precioToggle.setAttribute('aria-expanded', 'false');
-    });
-  }
 
   function leerPrecios(){
     const a = parseFloat(precioMinInput.value);
@@ -4964,7 +4080,6 @@
       const t = precioMin; precioMin = precioMax; precioMax = t;
     }
     if(precioLimpiar) precioLimpiar.hidden = (precioMin === null && precioMax === null);
-    actualizarPrecioToggle();
   }
 
   function aplicarPrecio(){
@@ -4993,14 +4108,12 @@
   sortBtn.addEventListener('click', (e)=>{
     e.stopPropagation();
     sortMenu.classList.toggle('show');
-    if(sortMenu.classList.contains('show')) moveSortThumb(sortMenu);
   });
   sortMenu.addEventListener('click', (e)=>{
     const opt = e.target.closest('.sort-option');
     if(!opt) return;
     sortMenu.querySelectorAll('.sort-option').forEach(o=>o.classList.remove('active'));
     opt.classList.add('active');
-    moveSortThumb(sortMenu);
     sortBtn.classList.toggle('active', opt.dataset.sort !== 'recientes');
     currentSort = opt.dataset.sort;
     sortMenu.classList.remove('show');
@@ -5021,7 +4134,6 @@
 
   searchInput.addEventListener('input', (e)=>{
     searchTerm = e.target.value;
-    if(searchTerm.trim()){ limpiarFiltrosDeBanner(); resetChipDeEstadoPorBusqueda(); }
     sincronizarBuscadores(searchInput);
     if(searchTerm.trim()) abrirCatalogoCompleto();
     render();
@@ -5030,7 +4142,6 @@
   if(catalogoSearchInput){
     catalogoSearchInput.addEventListener('input', (e)=>{
       searchTerm = e.target.value;
-      if(searchTerm.trim()){ limpiarFiltrosDeBanner(); resetChipDeEstadoPorBusqueda(); }
       sincronizarBuscadores(catalogoSearchInput);
       if(searchTerm.trim()) abrirCatalogoCompleto();
       render();
@@ -5038,11 +4149,6 @@
     catalogoSearchInput.addEventListener('keydown', (e)=>{
       if(e.key === 'Enter') confirmarBusqueda(catalogoSearchInput);
     });
-    const catalogoSearchGo = document.getElementById('catalogoSearchGo');
-    if(catalogoSearchGo){
-      catalogoSearchInput.addEventListener('input', ()=>{ catalogoSearchGo.hidden = !catalogoSearchInput.value.trim(); });
-      catalogoSearchGo.addEventListener('click', ()=> confirmarBusqueda(catalogoSearchInput));
-    }
   }
   // Enter en el buscador principal: salta directo al catálogo con el resultado,
   // y en celular cierra el teclado (el input pierde el foco).
@@ -5056,29 +4162,6 @@
   searchInput.addEventListener('keydown', (e)=>{
     if(e.key === 'Enter') confirmarBusqueda(searchInput);
   });
-  const heroSearchGo = document.getElementById('heroSearchGo');
-  if(heroSearchGo){
-    searchInput.addEventListener('input', ()=>{ heroSearchGo.hidden = !searchInput.value.trim(); });
-    heroSearchGo.addEventListener('click', ()=> confirmarBusqueda(searchInput));
-  }
-
-  // No saltamos al enfocar: se puede escribir con calma y el salto solo pasa
-  // al confirmar con Enter o el botón Buscar (confirmarBusqueda).
-
-  // El navegador puede restaurar la página desde el caché de "atrás/adelante"
-  // (bfcache) con el catálogo completo ya abierto de una búsqueda anterior.
-  // Al volver a entrar así, se resetea a la vista normal (teaser + buscador vacío).
-  window.addEventListener('pageshow', (e)=>{
-    if(!e.persisted) return;
-    cerrarCatalogoCompleto();
-    searchTerm = '';
-    [searchInput, catalogoSearchInput, document.getElementById('compactSearchInput')]
-      .forEach(inp=>{ if(inp) inp.value = ''; });
-    const go1 = document.getElementById('heroSearchGo'); if(go1) go1.hidden = true;
-    const go2 = document.getElementById('catalogoSearchGo'); if(go2) go2.hidden = true;
-    const go3 = document.getElementById('compactSearchGo'); if(go3) go3.hidden = true;
-    render();
-  });
 
   // ---- Barra compacta: buscador, orden y mostrar/ocultar al hacer scroll ----
   (function(){
@@ -5091,7 +4174,6 @@
     // Buscador compacto -> sincroniza con el principal
     compactSearchInput.addEventListener('input', (e)=>{
       searchTerm = e.target.value;
-      if(searchTerm.trim()){ limpiarFiltrosDeBanner(); resetChipDeEstadoPorBusqueda(); }
       sincronizarBuscadores(compactSearchInput);
       if(searchTerm.trim()) abrirCatalogoCompleto();
       render();
@@ -5099,31 +4181,22 @@
     compactSearchInput.addEventListener('keydown', (e)=>{
       if(e.key === 'Enter') confirmarBusqueda(compactSearchInput);
     });
-    const compactSearchGo = document.getElementById('compactSearchGo');
-    if(compactSearchGo){
-      compactSearchInput.addEventListener('input', ()=>{ compactSearchGo.hidden = !compactSearchInput.value.trim(); });
-      compactSearchGo.addEventListener('click', ()=> confirmarBusqueda(compactSearchInput));
-    }
 
     // Volver arriba al tocar el logo/nombre
     compactBrand.addEventListener('click', ()=> window.scrollTo({top:0, behavior:'smooth'}));
 
     // Menú de orden compacto (refleja el mismo estado)
-    if(compactSortBtn && compactSortMenu){
     compactSortBtn.addEventListener('click', (e)=>{
       e.stopPropagation();
       compactSortMenu.classList.toggle('show');
-      if(compactSortMenu.classList.contains('show')) moveSortThumb(compactSortMenu);
     });
     compactSortMenu.addEventListener('click', (e)=>{
       const opt = e.target.closest('.sort-option');
       if(!opt) return;
       compactSortMenu.querySelectorAll('.sort-option').forEach(o=>o.classList.remove('active'));
       opt.classList.add('active');
-      moveSortThumb(compactSortMenu);
       // reflejar también en el menú principal
       sortMenu.querySelectorAll('.sort-option').forEach(o=> o.classList.toggle('active', o.dataset.sort===opt.dataset.sort));
-      moveSortThumb(sortMenu);
       compactSortBtn.classList.toggle('active', opt.dataset.sort !== 'recientes');
       sortBtn.classList.toggle('active', opt.dataset.sort !== 'recientes');
       currentSort = opt.dataset.sort;
@@ -5135,7 +4208,6 @@
         compactSortMenu.classList.remove('show');
       }
     });
-    }
 
     // Mostrar al subir, ocultar al bajar (y nunca sobre el header superior)
     let lastY = window.scrollY;
@@ -5167,21 +4239,15 @@
     activeCategories.clear();
     precioMin = null; precioMax = null;
     searchTerm = '';
-    showOnlyMix = false;
-    mixToggle.classList.remove('active');
     searchInput.value = '';
     filterChips.querySelectorAll('.chip').forEach(c=> c.classList.toggle('active', c.dataset.filter === 'all'));
-    categoryChips.querySelectorAll('.chip-light[data-category]').forEach(c=> c.classList.toggle('active', c.dataset.category === 'all'));
-    moveChipThumb();
+    categoryChips.querySelectorAll('.chip-light').forEach(c=> c.classList.toggle('active', c.dataset.category === 'all'));
     if(precioMinInput) precioMinInput.value = '';
     if(precioMaxInput) precioMaxInput.value = '';
     if(catalogoSearchInput) catalogoSearchInput.value = '';
     if(precioLimpiar) precioLimpiar.hidden = true;
-    actualizarPrecioToggle();
     render();
   });
-  const clearFiltersInline = document.getElementById('clearFiltersInline');
-  if(clearFiltersInline) clearFiltersInline.addEventListener('click', ()=> clearFiltersBtn.click());
 
 
   // ================= herramientas de administración en lote =================
@@ -5377,12 +4443,9 @@
     adminToggle.classList.toggle('on', isAdmin);
     adminLabel.textContent = isAdmin ? 'Modo tienda: activo' : 'Modo tienda';
     addBtn.classList.toggle('show', isAdmin);
-    lotBtn.classList.toggle('show', isAdmin);
     exportBtn.classList.toggle('show', isAdmin);
     importBtn.classList.toggle('show', isAdmin);
     sheetBtn.classList.toggle('show', isAdmin);
-    if(compressBtn) compressBtn.classList.toggle('show', isAdmin);
-    if(notifBtn) notifBtn.classList.toggle('show', isAdmin);
     bannerBtn.classList.toggle('show', isAdmin);
     textsBtn.classList.toggle('show', isAdmin);
     if(isAdmin) resetIdleTimer(); else clearTimeout(idleTimer);
@@ -5393,14 +4456,14 @@
   exportBtn.addEventListener('click', ()=>{
     const payload = {
       exportedAt: new Date().toISOString(),
-      tienda: 'La Tienda de Meowth',
+      tienda: 'La Tienda de Miau',
       products
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'catalogo-meowth-respaldo-' + new Date().toISOString().slice(0,10) + '.json';
+    a.download = 'catalogo-miau-respaldo-' + new Date().toISOString().slice(0,10) + '.json';
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -5506,15 +4569,10 @@
     const kRec = buscar('recomendados','completatucoleccion','relacionados');
     const relatedNames = kRec ? (obj[kRec]||'').toString().split(',').map(t=>t.trim()).filter(Boolean) : null;
 
-    // Permite CORREGIR el nombre de un producto que ya existe, en vez de crear
-    // uno nuevo. Se escribe el nombre viejo aquí y el nuevo en la columna Nombre.
-    const kPrev = buscar('nombreanterior','nombreantiguo','nombreviejo','nombreanterior1');
-    const prevName = kPrev ? (obj[kPrev]||'').toString().trim() : '';
-
     return {
       name, price, category, status, desc, images,
       oldPrice: (oldPrice && oldPrice > price) ? oldPrice : null,
-      tags, shiny, expectedDate, relatedNames, prevName
+      tags, shiny, expectedDate, relatedNames
     };
   }
 
@@ -5543,22 +4601,13 @@
       const buffer = await res.arrayBuffer();
       const text = new TextDecoder('utf-8').decode(buffer);
       const parsed = Papa.parse(text, {header:true, skipEmptyLines:true});
-      let added = 0, updated = 0, renamed = 0;
+      let added = 0, updated = 0;
       const touched = [];
       const pendientesRelacionados = [];
-      const buscarPorNombre = (n)=> products.find(p=>
-        p.source==='sheet' && (p.name||'').trim().toLowerCase() === n.trim().toLowerCase());
       parsed.data.forEach(row=>{
         const m = mapSheetRow(row);
         if(!m.name) return;
-        let existing = buscarPorNombre(m.name);
-        // No aparece con el nombre nuevo: puede ser un cambio de nombre.
-        // Se busca por el nombre anterior y, si aparece, se renombra el mismo
-        // producto (conserva id, fotos subidas y todo lo demás).
-        if(!existing && m.prevName){
-          const anterior = buscarPorNombre(m.prevName);
-          if(anterior){ anterior.name = m.name; existing = anterior; renamed++; }
-        }
+        const existing = products.find(p=> p.source==='sheet' && p.name.trim().toLowerCase() === m.name.toLowerCase());
         // Campos opcionales: si la columna no está en la hoja, se respeta lo que ya tenía.
         const aplicarExtras = (prod)=>{
           if(m.tags !== null) prod.tags = m.tags;
@@ -5567,12 +4616,7 @@
           if(m.relatedNames !== null) pendientesRelacionados.push({ prod, nombres: m.relatedNames });
         };
         if(existing){
-          existing.price = m.price; existing.category = m.category;
-          // Si ya lo marcaste vendido a mano, el Sheet no lo vuelve a publicar
-          // (evita que se muestre como disponible de nuevo tras sincronizar).
-          if(existing.status !== 'vendido' || m.status === 'vendido'){
-            existing.status = m.status;
-          }
+          existing.price = m.price; existing.category = m.category; existing.status = m.status;
           existing.desc = m.desc; existing.images = m.images; existing.oldPrice = m.oldPrice;
           aplicarExtras(existing);
           updated++;
@@ -5601,8 +4645,7 @@
 
       if(touched.length){ await window.fbSaveProductsBatch(touched); publicarCatalogo(); }
       render();
-      showToast('Sincronizado: ' + added + ' nuevos, ' + updated + ' actualizados'
-        + (renamed ? ', ' + renamed + ' renombrados' : ''));
+      showToast('Sincronizado: ' + added + ' nuevos, ' + updated + ' actualizados');
     }catch(e){
       showToast('No se pudo sincronizar. Revisa que el link esté publicado como CSV.');
     }
@@ -5620,96 +4663,6 @@
   });
   sheetCancel.addEventListener('click', ()=> sheetOverlay.classList.remove('show'));
   sheetOverlay.addEventListener('click', (e)=>{ if(e.target === sheetOverlay) sheetOverlay.classList.remove('show'); });
-  const compressBtn = document.getElementById('compressBtn');
-  if(compressBtn) compressBtn.addEventListener('click', async ()=>{
-    if(!confirm('Esto vuelve a subir cada foto del catálogo ya comprimida. Puede tardar varios minutos y no se puede deshacer. ¿Continuar?')) return;
-    compressBtn.disabled = true;
-    const totalFotos = products.reduce((n,p)=> n + ((p.images||[]).length || (p.image?1:0)), 0);
-    let hechas = 0, fallidas = 0;
-    showToast('Comprimiendo 0/' + totalFotos + '...');
-    for(const p of products){
-      const imgs = Array.isArray(p.images) && p.images.length ? p.images : (p.image ? [p.image] : []);
-      if(!imgs.length) continue;
-      const nuevas = [];
-      for(const im of imgs){
-        const src = imgSrc(im), pos = imgPos(im);
-        try{
-          const res = await fetch(src);
-          const blob = await res.blob();
-          if(blob.size <= 220 * 1024){ nuevas.push({ src, pos }); hechas++; continue; } // ya es liviana, no la tocamos
-          const file = new File([blob], 'foto.jpg', { type: blob.type || 'image/jpeg' });
-          const nuevaUrl = await window.fbUploadImage(file);
-          nuevas.push({ src: nuevaUrl, pos });
-          hechas++;
-        }catch(e){
-          nuevas.push({ src, pos });
-          fallidas++;
-        }
-        showToast('Comprimiendo ' + hechas + '/' + totalFotos + '...');
-      }
-      p.images = nuevas;
-      try{ await window.fbSaveProduct(p); }catch(e){}
-    }
-    try{ await window.fbPublishCatalog(products); }catch(e){}
-    localStorage.removeItem(CACHE_KEY);
-    compressBtn.disabled = false;
-    showToast('Listo: ' + hechas + ' fotos revisadas' + (fallidas ? ', ' + fallidas + ' con error' : '') + '.');
-  });
-
-  const pushBtn = document.getElementById('pushBtn');
-  const iosPushOverlay = document.getElementById('iosPushOverlay');
-  const iosPushOk = document.getElementById('iosPushOk');
-  if(iosPushOk) iosPushOk.addEventListener('click', ()=> iosPushOverlay.classList.remove('show'));
-  if(iosPushOverlay) iosPushOverlay.addEventListener('click', (e)=>{ if(e.target===iosPushOverlay) iosPushOverlay.classList.remove('show'); });
-  if(pushBtn){
-    if(window.fbPushActivado && window.fbPushActivado()) pushBtn.classList.add('active');
-    pushBtn.addEventListener('click', async ()=>{
-      if(window.fbPushActivado && window.fbPushActivado()){ showToast('Ya tienes las notificaciones activadas.'); return; }
-      try{
-        await window.fbEnablePush();
-        pushBtn.classList.add('active', 'pulse');
-        setTimeout(()=> pushBtn.classList.remove('pulse'), 650);
-        showToast('¡Notificaciones activadas!');
-      }catch(e){
-        if(e.message === 'IOS_NO_INSTALADA') iosPushOverlay.classList.add('show');
-        else showToast(e.message || 'No se pudo activar las notificaciones.');
-      }
-    });
-  }
-
-  const notifBtn = document.getElementById('notifBtn');
-  const notifOverlay = document.getElementById('notifOverlay');
-  const notifTitleInput = document.getElementById('notifTitleInput');
-  const notifBodyInput = document.getElementById('notifBodyInput');
-  const notifLinkInput = document.getElementById('notifLinkInput');
-  const notifSendBtn = document.getElementById('notifSendBtn');
-  const notifCancel = document.getElementById('notifCancel');
-  if(notifBtn) notifBtn.addEventListener('click', ()=>{
-    notifTitleInput.value = ''; notifBodyInput.value = ''; notifLinkInput.value = '';
-    notifOverlay.classList.add('show');
-  });
-  if(notifCancel) notifCancel.addEventListener('click', ()=> notifOverlay.classList.remove('show'));
-  if(notifSendBtn) notifSendBtn.addEventListener('click', async ()=>{
-    const title = notifTitleInput.value.trim(), message = notifBodyInput.value.trim();
-    if(!title || !message){ showToast('Escribe el título y el mensaje.'); return; }
-    notifSendBtn.disabled = true;
-    try{
-      const pin = (await getPin()).toUpperCase();
-      const res = await fetch('/api/send-notification', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin, title, message, link: notifLinkInput.value.trim() })
-      });
-      const data = await res.json();
-      if(!res.ok) throw new Error(data.error || 'Error al enviar');
-      showToast('Enviada a ' + data.sent + ' de ' + data.total + ' dispositivos.');
-      notifOverlay.classList.remove('show');
-    }catch(e){
-      showToast(e.message || 'No se pudo enviar la notificación.');
-    }finally{
-      notifSendBtn.disabled = false;
-    }
-  });
-
   sheetSyncBtn.addEventListener('click', async ()=>{
     const url = sheetUrlInput.value.trim();
     if(!url){ showToast('Pega primero el link publicado'); return; }
@@ -5889,13 +4842,8 @@
     applyTheme(themePref);
     try{ localStorage.setItem(THEME_KEY, themePref); }catch(e){}
   });
-  window.addEventListener('storage', (e)=>{
-    if(e.key === THEME_KEY && (e.newValue === 'light' || e.newValue === 'dark')){
-      themePref = e.newValue;
-      temaElegidoManualmente = true;
-      applyTheme(themePref);
-    }
-  });
+
+  updateFavToggle();
 
   // Generar manifest para poder instalar como web app en el celular
   (function(){
@@ -5904,8 +4852,8 @@
       const iconSrc = logoImg ? logoImg.src : '';
       const bgNow = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#1e1e1e';
       const manifest = {
-        name: 'La Tienda de Meowth',
-        short_name: 'Meowth',
+        name: 'La Tienda de Miau',
+        short_name: 'Miau',
         start_url: '.',
         display: 'standalone',
         background_color: bgNow,
@@ -5931,12 +4879,15 @@
   })();
 
   // ---------- franja de confianza deslizante (arriba del header) ----------
-  function aplicarTicker(){
-    const messages = (siteContent.ticker || []).filter(m=> (m || '').trim());
-    if(!messages.length) return;
+  (function(){
+    const messages = [
+      'Envíos a todo el Perú',
+      'Productos 100% originales',
+      'Reserva pagando una parte',
+      'Asesoría personalizada'
+    ];
     const track = document.getElementById('trustTickerTrack');
     if(!track) return;
-    track.innerHTML = '';
     // Se duplica la lista una vez: al animar de 0% a -50% del ancho total,
     // la segunda copia entra justo cuando la primera sale, sin salto ni espacio en blanco.
     [...messages, ...messages].forEach(msg=>{
@@ -5945,8 +4896,7 @@
       el.textContent = msg;
       track.appendChild(el);
     });
-  }
-  aplicarTicker();
+  })();
 
   // Tarjetas "fantasma" mientras llegan los productos: la página se siente
   // viva de inmediato en vez de mostrar un hueco en blanco.
@@ -5957,6 +4907,12 @@
       d.innerHTML = '<div class="esq-foto"></div><div class="esq-linea"></div><div class="esq-linea corta"></div><div class="esq-boton"></div>';
       return d;
     };
+    const fila = document.getElementById('newArrivalsRow');
+    if(fila && !fila.children.length){
+      for(let i = 0; i < 5; i++) fila.appendChild(hueco());
+      const sec = document.getElementById('newArrivalsSection');
+      if(sec) sec.style.display = '';
+    }
     if(grid && !grid.children.length){
       for(let i = 0; i < 8; i++) grid.appendChild(hueco());
     }
@@ -5972,31 +4928,17 @@
     startApp();
   } else {
     window.addEventListener('firebase-ready', startApp, { once:true });
-    // Respaldo: si la conexión inicial tarda (primera visita, conexión fría),
-    // no dejamos la pantalla colgada: reintentamos varias veces antes de avisar.
-    let watchdogTries = 0;
-    const watchdog = setInterval(()=>{
-      if(window.__firebaseReady){ clearInterval(watchdog); return; }
-      watchdogTries++;
-      if(watchdogTries >= 5){
-        clearInterval(watchdog);
-        if(loadingState) loadingState.style.display='none';
-        showToast('La conexión está lenta. Reintentando...');
-        // último intento: si Firebase de verdad no respondió, forzamos un solo reintento de carga.
-        setTimeout(()=>{ if(!window.__firebaseReady) location.reload(); }, 4000);
-      }
-    }, 3000);
+    // Respaldo: si algo falla, no dejar la pantalla colgada más de 8s
+    setTimeout(()=>{ if(!window.__firebaseReady){ if(loadingState) loadingState.style.display='none'; showToast('No se pudo conectar con la base de datos. Revisa tu conexión.'); } }, 8000);
   }
 
-  document.querySelectorAll('.footer-link-btn[data-open-tab]').forEach(function(btn){
+  document.querySelectorAll('.footer-link-btn').forEach(function(btn){
     btn.addEventListener('click', function(){
       var key = btn.getAttribute('data-open-tab');
       cerrarCatalogoCompleto();
       requestAnimationFrame(function(){
-        requestAnimationFrame(function(){
-          var section = document.getElementById(key === 'quienes' ? 'quienesSection' : 'comprarSection');
-          if(section) section.scrollIntoView({behavior:'smooth', block:'start'});
-        });
+        var section = document.getElementById(key === 'quienes' ? 'quienesSection' : 'comprarSection');
+        if(section) section.scrollIntoView({behavior:'smooth', block:'start'});
       });
     });
   });
@@ -6009,22 +4951,17 @@
   function scrollToFooter(){
     cerrarCatalogoCompleto();
     requestAnimationFrame(function(){
-      requestAnimationFrame(function(){
-        var section = document.querySelector('.site-footer');
-        if(section) section.scrollIntoView({behavior:'smooth', block:'start'});
-      });
+      var section = document.querySelector('.site-footer');
+      if(section) section.scrollIntoView({behavior:'smooth', block:'start'});
     });
   }
   if(navCatalogo) navCatalogo.addEventListener('click', openFullCatalog);
   function scrollToFixedSection(key){
     cerrarCatalogoCompleto();
     var section = document.getElementById(key === 'quienes' ? 'quienesSection' : 'comprarSection');
-    // Doble rAF: espera a que el navegador reacomode la página tras cerrar el catálogo
-    // (el teaser tarda un frame extra en recuperar su alto real).
+    // Esperar a que el navegador reacomode la página tras cerrar el catálogo.
     requestAnimationFrame(function(){
-      requestAnimationFrame(function(){
-        if(section) section.scrollIntoView({behavior:'smooth', block:'start'});
-      });
+      if(section) section.scrollIntoView({behavior:'smooth', block:'start'});
     });
     var soundUrl = siteContent.sounds && siteContent.sounds[key];
     if(soundUrl){
