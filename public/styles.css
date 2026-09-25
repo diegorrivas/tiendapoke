@@ -210,6 +210,32 @@
   }
   .theme-btn svg{width:14px;height:14px;}
   #pushBtn.active{background:var(--red); color:#fff; border-color:var(--red);}
+
+  /* ---------- boton "ver solo favoritos" en el header ---------- */
+  #favToggle.active{background:var(--gold); border-color:var(--gold); color:var(--ink);}
+  #favToggle svg{width:16px; height:16px; fill:none;}
+  #favToggle.active svg{fill:var(--ink);}
+  .fav-count{
+    position:absolute; top:1px; right:1px; min-width:16px; height:16px; padding:0 3px;
+    border-radius:999px; background:var(--red); color:#fff; border:2px solid var(--surface);
+    font-size:9.5px; font-weight:800; line-height:12px; text-align:center;
+    display:none;
+  }
+  .fav-count.show{display:block;}
+
+  /* ---------- corazon de favoritos por producto ---------- */
+  .fav-btn{
+    position:absolute; bottom:10px; right:10px; z-index:7;
+    width:32px; height:32px; border-radius:50%; border:1px solid rgba(255,255,255,.25);
+    background:rgba(20,20,22,.5); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer;
+    transition:transform .15s ease, background .15s ease, color .15s ease;
+  }
+  .fav-btn svg{width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2;}
+  .fav-btn:hover{transform:translateY(-1px) scale(1.06); background:rgba(20,20,22,.7);}
+  .fav-btn.active{color:var(--red);}
+  .fav-btn.active svg{fill:var(--red); stroke:var(--red);}
+  .fav-btn.active{animation:heartPop .35s ease;}
   .ios-push-sheet{animation:iosSheetUp .25s ease;}
   @keyframes iosSheetUp{0%{transform:translateY(100%);} 100%{transform:translateY(0);}}
   .ios-push-handle{width:36px;height:4px;border-radius:3px;background:var(--line);margin:0 auto 14px;}

@@ -1,16 +1,13 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-  import {
-    getMessaging, getToken, onMessage
-  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
   import {
     getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc, writeBatch
-  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+  } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
   import {
     getStorage, ref, uploadBytes, getDownloadURL
-  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+  } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
   import {
     getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
-  } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+  } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAMpknTt4Dpv76kYf_xjOiuETf2VvC5efw",
@@ -26,46 +23,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
   const db = getFirestore(app);
   const storage = getStorage(app);
   const auth = getAuth(app);
-
-  // ---------- notificaciones push ----------
-  // La clave VAPID se genera en Firebase Console: Configuración del proyecto ->
-  // Cloud Messaging -> pestaña "Web configuration" -> "Generate key pair".
-  const VAPID_KEY = "BKGBjWh-SmLfXJSNVCmrBZUAowlw3ixiLye92bDLeNDqoMQhqDMP1hjDPn33ir0OT7Qq53Za_W7xayc6MUhZ2G0";
-  window.fbEnablePush = async function(){
-    const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const instalada = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-    if(esIOS && !instalada) throw new Error('IOS_NO_INSTALADA');
-    if(!('serviceWorker' in navigator) || !('Notification' in window)) throw new Error('Este navegador no soporta notificaciones.');
-    const permiso = await Notification.requestPermission();
-    if(permiso !== 'granted') throw new Error('Permiso de notificaciones denegado.');
-    const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-    const messaging = getMessaging(app);
-    const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
-    if(!token) throw new Error('No se pudo generar el token de notificaciones.');
-    // Si la pestaña está abierta y enfocada, FCM entrega el mensaje aquí en vez
-    // de al service worker — sin este listener, la notificación de bienvenida
-    // (y cualquier otra mientras navegan la web) no se vería nunca.
-    onMessage(messaging, (payload)=>{
-      const d = payload.data || {};
-      if(!d.title) return;
-      try{ new Notification(d.title, { body: d.body || '', icon: d.icon || '/icon-192.png' }); }catch(e){}
-    });
-    await setDoc(doc(db, 'push_tokens', token), { token, createdAt: Date.now() });
-    localStorage.setItem('push-activado', '1');
-    fetch('/api/send-notification', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        onlyToken: token,
-        title: '¡Bienvenido a las notificaciones! 🔔',
-        message: 'Te avisaré de nuevo stock, ofertas y notas nuevas del blog 😸. Puedes desactivarlas cuando quieras desde tu navegador.',
-        link: 'https://tiendapoke.com/'
-      })
-    }).catch(()=>{});
-    return token;
-  };
-  window.fbPushActivado = function(){
-    return localStorage.getItem('push-activado') === '1' && Notification.permission === 'granted';
-  };
 
   // ---------- inicio de sesión del administrador ----------
   // El panel solo puede escribir/borrar si hay una sesión iniciada. Las reglas
@@ -119,33 +76,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
     }
   };
 
-  // Reduce tamaño de la foto antes de subirla: máx 1600px de lado y calidad 0.82.
-  // Así las fotos nuevas pesan una fracción de lo que pesa la foto original del celular.
-  async function comprimirImagen(file){
-    if(!file.type || !file.type.startsWith('image/') || file.type === 'image/gif') return file;
-    try{
-      const bitmap = await createImageBitmap(file);
-      const MAX = 1600;
-      let { width, height } = bitmap;
-      if(width > MAX || height > MAX){
-        const ratio = Math.min(MAX / width, MAX / height);
-        width = Math.round(width * ratio);
-        height = Math.round(height * ratio);
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width; canvas.height = height;
-      canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
-      const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.82));
-      if(!blob || blob.size >= file.size) return file; // si no mejora, nos quedamos con la original
-      return new File([blob], (file.name || 'foto').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
-    }catch(e){
-      return file; // si algo falla (formato raro, navegador viejo), subimos la original
-    }
-  }
-
   // Subida de imagenes a Firebase Storage -> devuelve el link publico.
   window.fbUploadImage = async function(file){
-    file = await comprimirImagen(file);
     const stamp = Date.now() + '_' + Math.random().toString(36).slice(2,8);
     const safeName = (file.name || 'foto').replace(/[^\w.\-]/g, '_');
     const r = ref(storage, 'productos/' + stamp + '_' + safeName);
@@ -249,18 +181,3 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebas
 
   window.__firebaseReady = true;
   window.dispatchEvent(new Event('firebase-ready'));
-
-  // ---------- blog: un documento por post (colección "blog_posts") ----------
-  const BLOG_COL = 'blog_posts';
-  window.fbLoadBlogPosts = async function(){
-    const snap = await getDocs(collection(db, BLOG_COL));
-    const list = [];
-    snap.forEach(d => list.push(d.data()));
-    return list;
-  };
-  window.fbSaveBlogPost = async function(post){
-    await setDoc(doc(db, BLOG_COL, String(post.id)), post);
-  };
-  window.fbDeleteBlogPost = async function(id){
-    await deleteDoc(doc(db, BLOG_COL, String(id)));
-  };
