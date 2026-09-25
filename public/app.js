@@ -104,8 +104,8 @@
   const cartFabCount = document.getElementById('cartFabCount');
   function updateInquiryBadge(){
     const n = inquiryList.reduce((sum,it)=> sum + (it.qty||1), 0);
-    inquiryCount.textContent = n;
-    inquiryCount.classList.toggle('show', n > 0);
+    if(inquiryCount) inquiryCount.textContent = n;
+    if(inquiryCount) inquiryCount.classList.toggle('show', n > 0);
     if(cartFabCount) cartFabCount.textContent = n;
     if(cartFab) cartFab.classList.toggle('show', n > 0);
   }
@@ -279,7 +279,7 @@
   function closeInquiryModal(){
     inquiryOverlay.classList.remove('show');
   }
-  inquiryListBtn.addEventListener('click', openInquiryModal);
+  if(inquiryListBtn) inquiryListBtn.addEventListener('click', openInquiryModal);
   inquiryClose.addEventListener('click', closeInquiryModal);
   inquiryOverlay.addEventListener('click', (e)=>{ if(e.target === inquiryOverlay) closeInquiryModal(); });
   const inquirySeguirBtn = document.getElementById('inquirySeguirBtn');
