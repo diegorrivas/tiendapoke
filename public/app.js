@@ -1774,7 +1774,7 @@
     const tema = document.documentElement.getAttribute('data-theme') || 'dark';
     const logos = siteContent.logos || {};
     const propio = tema === 'light' ? logos.claro : logos.oscuro;
-    const src = propio ? imgSrc(propio) : ('logo.png?v=20260721g');
+    const src = propio ? imgSrc(propio) : ('logo.png?v=20260925');
     ['logoHeader','logoCompacto'].forEach(id=>{
       const img = document.getElementById(id);
       if(img) img.src = src;
